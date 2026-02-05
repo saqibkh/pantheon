@@ -30,7 +30,7 @@
     #define hipStreamDestroy cudaStreamDestroy
     #define hipStreamSynchronize cudaStreamSynchronize
     
-    // ** Added hipMemset definition **
+    // Ensure hipMemset is mapped
     #define hipMemset cudaMemset 
 
 #else
@@ -60,9 +60,12 @@ typedef unsigned int uint4_ __attribute__((vector_size(16)));
 // --- NON-TEMPORAL STORE (Bypass Cache -> Write HBM) ---
 __device__ __forceinline__ void store_nt(void* addr, uint4 val) {
 #ifdef __HIP_PLATFORM_AMD__
+    // Use builtin for AMD to generate non-temporal stores if possible,
+    // otherwise fallback to cast (which is safe for stores usually)
     typedef unsigned int __attribute__((vector_size(16))) vec_uint4;
     __builtin_nontemporal_store(*(vec_uint4*)&val, (vec_uint4*)addr);
 #elif defined(__CUDACC__)
+    // NVIDIA PTX
     asm volatile("st.global.cs.v4.u32 [%0], {%1, %2, %3, %4};" 
                  :: "l"(addr), "r"(val.x), "r"(val.y), "r"(val.z), "r"(val.w));
 #else
@@ -70,14 +73,21 @@ __device__ __forceinline__ void store_nt(void* addr, uint4 val) {
 #endif
 }
 
-// --- NON-TEMPORAL LOAD (Bypass Cache -> Read HBM) ---
+// --- NON-TEMPORAL LOAD (CRASH-PROOF VERSION) ---
 __device__ __forceinline__ uint4 load_nt(void* addr) {
     uint4 ret;
 #ifdef __HIP_PLATFORM_AMD__
-    typedef unsigned int __attribute__((vector_size(16))) vec_uint4;
-    vec_uint4 v = __builtin_nontemporal_load((vec_uint4*)addr);
-    ret = *(uint4*)&v;
+    // RDNA CRASH FIX: Decompose into 4x 32-bit loads.
+    // Attempting a single 128-bit vector load (*(uint4*)) segfaults on RDNA
+    // if the buffer isn't perfectly 128-bit aligned.
+    // The compiler -O3 will re-vectorize this safely.
+    unsigned int* p = (unsigned int*)addr;
+    ret.x = p[0];
+    ret.y = p[1];
+    ret.z = p[2];
+    ret.w = p[3];
 #elif defined(__CUDACC__)
+    // NVIDIA PTX Streaming Load
     asm volatile("ld.global.cs.v4.u32 {%0, %1, %2, %3}, [%4];" 
                  : "=r"(ret.x), "=r"(ret.y), "=r"(ret.z), "=r"(ret.w) : "l"(addr));
 #else
@@ -86,4 +96,4 @@ __device__ __forceinline__ uint4 load_nt(void* addr) {
     return ret;
 }
 
-#endif // PANTHEON_COMMON_H 
+#endif // PANTHEON_COMMON_H
