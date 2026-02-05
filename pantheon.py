@@ -27,10 +27,20 @@ RESULTS_BASE_DIR = "results"
 DATABASE_DIR = "database"
 
 TEST_REGISTRY = {
-    "hbm_write":  {"bin": "hbm_write",    "args": [], "desc": "HBM Write (NT Store) - Max Power/Thermals"},
-    "hbm_read":   {"bin": "hbm_read",     "args": [], "desc": "HBM Read (NT Load) - Max Throughput"},
-    "cache_lat":  {"bin": "cache_latency","args": [], "desc": "Pointer Chasing (Latency Stress)"},
-    "voltage":    {"bin": "compute_virus","args": [], "desc": "Voltage Droop Virus (ALU Hammer)"}
+    # HBM Write
+    "hbm_write":      {"bin": "hbm_write",       "args": [], "desc": "HBM Write (NT Store) - Standard"},
+    "hbm_write_agg":  {"bin": "hbm_write_agg",   "args": [], "desc": "HBM Write (Aggressive) - Crosstalk Pattern"},
+    
+    # HBM Read
+    "hbm_read":       {"bin": "hbm_read",        "args": [], "desc": "HBM Read (NT Load) - Standard"},
+    "hbm_read_agg":   {"bin": "hbm_read_agg",    "args": [], "desc": "HBM Read (Aggressive) - 8-Way ILP Queue Stuffing"},
+    
+    # Compute / Voltage
+    "voltage":        {"bin": "compute_virus",   "args": [], "desc": "Voltage Virus - FMA Hammer"},
+    "incinerator":    {"bin": "compute_virus_agg","args": [],"desc": "Incinerator - FMA + LDS (Shared Mem) Virus"},
+    
+    # Cache
+    "cache_lat":      {"bin": "cache_latency",   "args": [], "desc": "Pointer Chasing (Latency Stress)"}
 }
 
 def log(msg):
@@ -275,7 +285,7 @@ def main():
     print("\n" + "="*80)
     print("FINAL SUMMARY REPORT")
     print("="*80)
-    print(df.to_string(index=False))
+    print(df.drop(columns=["Description"]).to_string(index=False))
     print("="*80)
 
     # 1. Save Simple Reports (CSV/Excel) in results/ folder
