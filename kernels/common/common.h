@@ -1,10 +1,45 @@
 #ifndef PANTHEON_COMMON_H
 #define PANTHEON_COMMON_H
 
-#include "../common/hip_shim.h" 
 #include <iostream>
 #include <cstdlib>
 
+// --- CROSS-PLATFORM SHIM (HIP -> CUDA) ---
+#ifdef __CUDACC__
+    // NVIDIA / CUDA MODE
+    #include <cuda_runtime.h>
+    #include <device_launch_parameters.h>
+
+    // 1. Rename Types
+    #define hipError_t cudaError_t
+    #define hipSuccess cudaSuccess
+    #define hipDeviceProp_t cudaDeviceProp
+    #define hipGetErrorString cudaGetErrorString
+    #define hipStream_t cudaStream_t
+
+    // 2. Rename Functions
+    #define hipSetDevice cudaSetDevice
+    #define hipGetDeviceProperties cudaGetDeviceProperties
+    #define hipMalloc cudaMalloc
+    #define hipFree cudaFree
+    #define hipMemcpy cudaMemcpy
+    #define hipMemcpyDeviceToHost cudaMemcpyDeviceToHost
+    #define hipMemGetInfo cudaMemGetInfo
+    #define hipDeviceSynchronize cudaDeviceSynchronize
+    #define hipStreamCreate cudaStreamCreate
+    #define hipStreamDestroy cudaStreamDestroy
+    #define hipStreamSynchronize cudaStreamSynchronize
+    
+    // ** Added hipMemset definition **
+    #define hipMemset cudaMemset 
+
+#else
+    // AMD / ROCm MODE
+    #include <hip/hip_runtime.h>
+#endif
+
+
+// --- SHARED MACROS & UTILS ---
 #define BLOCK_SIZE 256
 
 #define CHECK(cmd) \
@@ -18,7 +53,11 @@
     } \
 }
 
-// --- Non-Temporal Store (Bypass Cache & Write to HBM) ---
+// 128-bit Vector Types
+typedef float float4_ __attribute__((vector_size(16)));
+typedef unsigned int uint4_ __attribute__((vector_size(16)));
+
+// --- NON-TEMPORAL STORE (Bypass Cache -> Write HBM) ---
 __device__ __forceinline__ void store_nt(void* addr, uint4 val) {
 #ifdef __HIP_PLATFORM_AMD__
     typedef unsigned int __attribute__((vector_size(16))) vec_uint4;
@@ -31,7 +70,7 @@ __device__ __forceinline__ void store_nt(void* addr, uint4 val) {
 #endif
 }
 
-// --- Non-Temporal Load (Bypass Cache & Read from HBM) ---
+// --- NON-TEMPORAL LOAD (Bypass Cache -> Read HBM) ---
 __device__ __forceinline__ uint4 load_nt(void* addr) {
     uint4 ret;
 #ifdef __HIP_PLATFORM_AMD__
@@ -47,4 +86,4 @@ __device__ __forceinline__ uint4 load_nt(void* addr) {
     return ret;
 }
 
-#endif // PANTHEON_COMMON_H
+#endif // PANTHEON_COMMON_H 

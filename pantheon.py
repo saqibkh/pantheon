@@ -27,20 +27,18 @@ RESULTS_BASE_DIR = "results"
 DATABASE_DIR = "database"
 
 TEST_REGISTRY = {
-    # HBM Write
-    "hbm_write":      {"bin": "hbm_write",       "args": [], "desc": "HBM Write (NT Store) - Standard"},
-    "hbm_write_agg":  {"bin": "hbm_write_agg",   "args": [], "desc": "HBM Write (Aggressive) - Crosstalk Pattern"},
-    
-    # HBM Read
-    "hbm_read":       {"bin": "hbm_read",        "args": [], "desc": "HBM Read (NT Load) - Standard"},
-    "hbm_read_agg":   {"bin": "hbm_read_agg",    "args": [], "desc": "HBM Read (Aggressive) - 8-Way ILP Queue Stuffing"},
-    
-    # Compute / Voltage
-    "voltage":        {"bin": "compute_virus",   "args": [], "desc": "Voltage Virus - FMA Hammer"},
-    "incinerator":    {"bin": "compute_virus_agg","args": [],"desc": "Incinerator - FMA + LDS (Shared Mem) Virus"},
-    
-    # Cache
-    "cache_lat":      {"bin": "cache_latency",   "args": [], "desc": "Pointer Chasing (Latency Stress)"}
+    # Existing
+    "hbm_write":      {"bin": "hbm_write",       "args": [], "desc": "HBM Write (Standard)"},
+    "hbm_write_agg":  {"bin": "hbm_write_agg",   "args": [], "desc": "HBM Write (Aggressive)"},
+    "hbm_read":       {"bin": "hbm_read",        "args": [], "desc": "HBM Read (Standard)"},
+    "hbm_read_agg":   {"bin": "hbm_read_agg",    "args": [], "desc": "HBM Read (Aggressive)"},
+    "voltage":        {"bin": "compute_virus",   "args": [], "desc": "Voltage Virus (ALU Hammer)"},
+    "incinerator":    {"bin": "compute_virus_agg","args": [],"desc": "Incinerator (LDS Stress)"},
+    "cache_lat":      {"bin": "cache_latency",   "args": [], "desc": "Cache Latency"},
+
+    # NEW TESTS
+    "tensor_virus":   {"bin": "tensor_virus",    "args": [], "desc": "Tensor Virus (FP16 Matrix Power)"},
+    "atomic_virus":   {"bin": "atomic_virus",    "args": [], "desc": "Atomic Virus (L2 Cache Thrash)"}
 }
 
 def log(msg):
