@@ -253,11 +253,17 @@ def main():
             throughput = "N/A"
             
             if out:
+                # print(out) # DEBUG: Uncomment if you still see N/A
                 for line in out.split('\n'):
                     if "Throughput:" in line:
                         try:
-                            throughput = float(line.split(":")[1].replace("GB/s", "").strip())
-                        except: pass
+                            # Split by ":", take the right side
+                            raw_val = line.split(":")[1].strip()
+                            # Extract just the number (remove GB/s, MAPS, etc)
+                            number_part = raw_val.split(' ')[0] 
+                            throughput = float(number_part)
+                        except: 
+                            pass
             
             stats = hw_stats.get(gpu, {})
             row = {

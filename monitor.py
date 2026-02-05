@@ -11,18 +11,19 @@ class HardwareMonitor:
         self.has_rocm_smi = shutil.which("rocm-smi") is not None
         self.has_nvidia_smi = shutil.which("nvidia-smi") is not None
         self.running = False
-        self.history = {} # {gpu_id: {'temp': [], 'pwr': [], 'clk': []}}
+        self.history = {} 
         self.thread = None
 
     def get_gpu_count(self):
         if self.platform == "HIP" and self.has_rocm_smi:
             try:
-                out = subprocess.check_output("rocm-smi -i --json", shell=True)
+                # AMD: Count keys in JSON output
+                out = subprocess.check_output("rocm-smi -i --json", shell=True).decode()
                 return len(json.loads(out))
             except: return 1
         elif self.has_nvidia_smi:
             try:
-                out = subprocess.check_output("nvidia-smi --query-gpu=count --format=csv,noheader", shell=True)
+                out = subprocess.check_output("nvidia-smi --query-gpu=count --format=csv,noheader", shell=True).decode()
                 return int(out.strip())
             except: return 1
         return 1
@@ -48,21 +49,55 @@ class HardwareMonitor:
 
     def _poll_amd(self, gpu_ids):
         try:
-            out = subprocess.check_output("rocm-smi -P -t -c --json", shell=True)
+            # -P (Power), -t (Temp), -c (Clock), -m (Mem Clock)
+            out = subprocess.check_output("rocm-smi -P -t -c -m --json", shell=True).decode()
             data = json.loads(out)
+            
             for gid in gpu_ids:
-                key = f"card{gid}"
-                if key in data:
-                    c = data[key]
-                    try:
-                        self.history[gid]['temp'].append(float(c.get("Temperature (Sensor edge)", 0)))
-                        self.history[gid]['pwr'].append(float(c.get("Average Power", 0)))
-                        # Clock string might be like "(1200Mhz)"
-                        clk_raw = c.get("sclk clock speed:", "(0Mhz)")
-                        clk = float(clk_raw.replace("(", "").replace(")", "").replace("Mhz", ""))
-                        self.history[gid]['clk'].append(clk)
-                    except: pass
-        except: pass
+                # card0, card1... or gpu0... try to find the key
+                card_key = f"card{gid}"
+                if card_key not in data: 
+                    # Try finding by index if cardN naming fails
+                    keys = list(data.keys())
+                    if len(keys) > gid: card_key = keys[gid]
+                
+                if card_key in data:
+                    c = data[card_key]
+                    
+                    # --- ROBUST KEY SEARCH ---
+                    # 1. Temperature (Prioritize HBM/Junction, Fallback to Edge)
+                    t_val = 0
+                    for k, v in c.items():
+                        k_lower = k.lower()
+                        if "temp" in k_lower and "edge" in k_lower: 
+                            t_val = float(v) # Baseline
+                        if "temp" in k_lower and ("junction" in k_lower or "hotspot" in k_lower or "hbm" in k_lower):
+                            t_val = float(v) # Upgrade to hotspot if found
+                            break
+                    if t_val > 0: self.history[gid]['temp'].append(t_val)
+
+                    # 2. Power
+                    p_val = 0
+                    for k, v in c.items():
+                        if "power" in k.lower() and "average" in k.lower():
+                            p_val = float(v)
+                            break
+                        if "power" in k.lower() and float(v) > p_val:
+                            p_val = float(v)
+                    if p_val > 0: self.history[gid]['pwr'].append(p_val)
+
+                    # 3. Clock (SCLK or MCLK)
+                    clk_val = 0
+                    for k, v in c.items():
+                        if "sclk" in k.lower() and "(" in str(v):
+                            # Format: "(1200Mhz)"
+                            clean = str(v).replace("(", "").replace(")", "").replace("Mhz", "")
+                            clk_val = float(clean)
+                            break
+                    if clk_val > 0: self.history[gid]['clk'].append(clk_val)
+
+        except Exception as e:
+            pass
 
     def _poll_nvidia(self, gpu_ids):
         try:
@@ -80,6 +115,7 @@ class HardwareMonitor:
     def _aggregate(self):
         stats = {}
         for gid, data in self.history.items():
+            # If no data collected (e.g. sensor failure), avoid crash with default 0
             stats[gid] = {
                 "avg_temp": round(np.mean(data['temp']), 1) if data['temp'] else 0,
                 "max_temp": round(np.max(data['temp']), 1) if data['temp'] else 0,
