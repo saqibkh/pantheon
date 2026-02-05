@@ -1,0 +1,1250 @@
+
+==================================================
+FILE: ./Makefile
+==================================================
+# PANTHEON Build System
+HIPCC ?= hipcc
+CXXFLAGS := -O3 -std=c++14 -DNDEBUG -Ikernels/common
+BUILD_DIR := build
+
+ifeq ($(PLATFORM), CUDA)
+    COMPILER := nvcc
+    CXXFLAGS += -x cu --gpu-architecture=sm_70 -Wno-deprecated-gpu-targets
+else
+    COMPILER := hipcc
+    CXXFLAGS += -std=c++17 --offload-arch=native
+endif
+
+TARGETS := $(BUILD_DIR)/hbm_write $(BUILD_DIR)/hbm_read $(BUILD_DIR)/cache_latency $(BUILD_DIR)/compute_virus
+
+all: $(TARGETS)
+
+$(BUILD_DIR)/hbm_write: kernels/hbm_write/hbm_write.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(COMPILER) $(CXXFLAGS) $< -o $@
+
+$(BUILD_DIR)/hbm_read: kernels/hbm_read/hbm_read.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(COMPILER) $(CXXFLAGS) $< -o $@
+
+$(BUILD_DIR)/cache_latency: kernels/cache_latency/cache_latency.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(COMPILER) $(CXXFLAGS) $< -o $@
+
+$(BUILD_DIR)/compute_virus: kernels/compute_virus/compute_virus.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(COMPILER) $(CXXFLAGS) $< -o $@
+
+clean:
+	rm -rf $(BUILD_DIR)
+
+
+==================================================
+FILE: ./LICENSE
+==================================================
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+
+==================================================
+FILE: ./monitor.py
+==================================================
+import subprocess
+import time
+import json
+import shutil
+import threading
+import numpy as np
+
+class HardwareMonitor:
+    def __init__(self, platform):
+        self.platform = platform
+        self.has_rocm_smi = shutil.which("rocm-smi") is not None
+        self.has_nvidia_smi = shutil.which("nvidia-smi") is not None
+        self.running = False
+        self.history = {} # {gpu_id: {'temp': [], 'pwr': [], 'clk': []}}
+        self.thread = None
+
+    def get_gpu_count(self):
+        if self.platform == "HIP" and self.has_rocm_smi:
+            try:
+                out = subprocess.check_output("rocm-smi -i --json", shell=True)
+                return len(json.loads(out))
+            except: return 1
+        elif self.has_nvidia_smi:
+            try:
+                out = subprocess.check_output("nvidia-smi --query-gpu=count --format=csv,noheader", shell=True)
+                return int(out.strip())
+            except: return 1
+        return 1
+
+    def start_collection(self, gpu_ids):
+        self.running = True
+        self.history = {gid: {'temp': [], 'pwr': [], 'clk': []} for gid in gpu_ids}
+        self.thread = threading.Thread(target=self._loop, args=(gpu_ids,))
+        self.thread.start()
+
+    def stop_collection(self):
+        self.running = False
+        if self.thread: self.thread.join()
+        return self._aggregate()
+
+    def _loop(self, gpu_ids):
+        while self.running:
+            if self.platform == "HIP" and self.has_rocm_smi:
+                self._poll_amd(gpu_ids)
+            elif self.has_nvidia_smi:
+                self._poll_nvidia(gpu_ids)
+            time.sleep(1)
+
+    def _poll_amd(self, gpu_ids):
+        try:
+            out = subprocess.check_output("rocm-smi -P -t -c --json", shell=True)
+            data = json.loads(out)
+            for gid in gpu_ids:
+                key = f"card{gid}"
+                if key in data:
+                    c = data[key]
+                    try:
+                        self.history[gid]['temp'].append(float(c.get("Temperature (Sensor edge)", 0)))
+                        self.history[gid]['pwr'].append(float(c.get("Average Power", 0)))
+                        # Clock string might be like "(1200Mhz)"
+                        clk_raw = c.get("sclk clock speed:", "(0Mhz)")
+                        clk = float(clk_raw.replace("(", "").replace(")", "").replace("Mhz", ""))
+                        self.history[gid]['clk'].append(clk)
+                    except: pass
+        except: pass
+
+    def _poll_nvidia(self, gpu_ids):
+        try:
+            cmd = "nvidia-smi --query-gpu=index,temperature.gpu,power.draw,clocks.gr --format=csv,noheader,nounits"
+            out = subprocess.check_output(cmd, shell=True).decode()
+            for line in out.strip().split('\n'):
+                parts = line.split(',')
+                idx = int(parts[0])
+                if idx in self.history:
+                    self.history[idx]['temp'].append(float(parts[1]))
+                    self.history[idx]['pwr'].append(float(parts[2]))
+                    self.history[idx]['clk'].append(float(parts[3]))
+        except: pass
+
+    def _aggregate(self):
+        stats = {}
+        for gid, data in self.history.items():
+            stats[gid] = {
+                "avg_temp": round(np.mean(data['temp']), 1) if data['temp'] else 0,
+                "max_temp": round(np.max(data['temp']), 1) if data['temp'] else 0,
+                "avg_pwr":  round(np.mean(data['pwr']), 1) if data['pwr'] else 0,
+                "max_pwr":  round(np.max(data['pwr']), 1) if data['pwr'] else 0,
+                "avg_clk":  round(np.mean(data['clk']), 0) if data['clk'] else 0,
+            }
+        return stats
+
+
+==================================================
+FILE: ./.gitignore
+==================================================
+# Prerequisites
+*.d
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+# debug information files
+*.dwo
+
+
+==================================================
+FILE: ./README.md
+==================================================
+# pantheon
+
+==================================================
+FILE: ./pantheon.py
+==================================================
+import argparse
+import subprocess
+import time
+import os
+import sys
+import threading
+import datetime
+import json
+import platform
+import shutil
+import pandas as pd
+import numpy as np
+from monitor import HardwareMonitor
+
+# Try to import psutil, warn if missing
+try:
+    import psutil
+except ImportError:
+    print("[PANTHEON] Warning: 'psutil' module not found. System info will be limited.")
+    print("           Install it via: pip3 install psutil")
+    psutil = None
+
+# --- Configuration ---
+BUILD_DIR = "build"
+KERNEL_DIR = "kernels"
+RESULTS_BASE_DIR = "results"
+DATABASE_DIR = "database"
+
+TEST_REGISTRY = {
+    "hbm_write":  {"bin": "hbm_write",    "args": [], "desc": "HBM Write (NT Store) - Max Power/Thermals"},
+    "hbm_read":   {"bin": "hbm_read",     "args": [], "desc": "HBM Read (NT Load) - Max Throughput"},
+    "cache_lat":  {"bin": "cache_latency","args": [], "desc": "Pointer Chasing (Latency Stress)"},
+    "voltage":    {"bin": "compute_virus","args": [], "desc": "Voltage Droop Virus (ALU Hammer)"}
+}
+
+def log(msg):
+    print(f"[PANTHEON] {msg}")
+
+def ensure_dir(path):
+    if not os.path.exists(path): os.makedirs(path)
+
+# --- System & GPU Info Gathering ---
+
+def get_size(bytes, suffix="B"):
+    """Scale bytes to proper format"""
+    factor = 1024
+    for unit in ["", "K", "M", "G", "T", "P"]:
+        if bytes < factor:
+            return f"{bytes:.2f}{unit}{suffix}"
+        bytes /= factor
+
+def get_gpu_static_info():
+    """Detects static GPU details (Name, VRAM, Driver) via CLI tools."""
+    gpu_list = []
+    
+    # 1. Try NVIDIA
+    if shutil.which("nvidia-smi"):
+        try:
+            cmd = ["nvidia-smi", "--query-gpu=index,name,memory.total,driver_version", "--format=csv,noheader,nounits"]
+            out = subprocess.check_output(cmd, encoding="utf-8").strip()
+            for line in out.split('\n'):
+                idx, name, mem, driver = line.split(", ")
+                gpu_list.append({
+                    "id": int(idx),
+                    "type": "NVIDIA",
+                    "name": name,
+                    "memory_total": f"{mem} MB",
+                    "driver_version": driver
+                })
+        except: pass
+
+    # 2. Try AMD
+    if shutil.which("rocm-smi") and not gpu_list:
+        try:
+            # ROCm SMI logic is trickier to parse cleanly in one go, usually returns JSON
+            out = subprocess.check_output("rocm-smi --showproductname --showmeminfo vram --json", shell=True, encoding="utf-8")
+            data = json.loads(out)
+            # data structure: {"card0": {"...": "..."}}
+            for key, val in data.items():
+                idx = int(key.replace("card", ""))
+                # Extract Name
+                name = val.get("Card Series", "Unknown AMD GPU")
+                # Extract VRAM
+                vram = val.get("VRAM Total Memory (B)", "0")
+                if vram != "0":
+                    vram = f"{int(vram) // (1024*1024)} MB"
+                
+                gpu_list.append({
+                    "id": idx,
+                    "type": "AMD",
+                    "name": name,
+                    "memory_total": vram,
+                    "driver_version": "ROCm Driver" # Hard to get exact kernel module version via simple smi
+                })
+        except: pass
+
+    return gpu_list
+
+def get_toolkit_version(platform_name):
+    """Get CUDA or ROCm/HIP version."""
+    version = "Unknown"
+    if platform_name == "CUDA":
+        try:
+            out = subprocess.check_output(["nvcc", "--version"], encoding="utf-8")
+            for line in out.split('\n'):
+                if "release" in line:
+                    version = line.split("release ")[1].split(",")[0]
+        except: pass
+    elif platform_name == "HIP":
+        try:
+            # Try to read local version file common on ROCm installs
+            if os.path.exists("/opt/rocm/.info/version"):
+                with open("/opt/rocm/.info/version") as f:
+                    version = f.read().strip()
+            else:
+                out = subprocess.check_output(["hipcc", "--version"], encoding="utf-8")
+                version = "HIPCC Detected"
+        except: pass
+    return version
+
+def get_system_snapshot(platform_name):
+    """Aggregates all system info into a dictionary."""
+    snapshot = {
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "os_info": {
+            "system": platform.system(),
+            "release": platform.release(), # Kernel Version
+            "version": platform.version(),
+            "arch": platform.machine(),
+        },
+        "cpu_info": "psutil_missing",
+        "ram_info": "psutil_missing",
+        "gpu_static_info": get_gpu_static_info(),
+        "toolkit_version": get_toolkit_version(platform_name)
+    }
+
+    if psutil:
+        vm = psutil.virtual_memory()
+        snapshot["cpu_info"] = {
+            "physical_cores": psutil.cpu_count(logical=False),
+            "logical_cores": psutil.cpu_count(logical=True),
+            "freq": f"{psutil.cpu_freq().current:.2f}Mhz" if psutil.cpu_freq() else "N/A"
+        }
+        snapshot["ram_info"] = {
+            "total": get_size(vm.total),
+            "available": get_size(vm.available)
+        }
+
+    return snapshot
+
+# --- Core Logic ---
+
+def detect_platform():
+    if subprocess.run("which hipcc", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
+        return "HIP"
+    if subprocess.run("which nvcc", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
+        return "CUDA"
+    return "UNKNOWN"
+
+def build_kernels(platform):
+    log(f"Detected Platform: {platform}. Compiling kernels...")
+    ensure_dir(BUILD_DIR)
+    cmd = ["make", f"PLATFORM={platform}"]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        print("Build Failed:\n" + result.stderr)
+        sys.exit(1)
+    log("Build Complete.")
+
+def run_test(test_name, gpu_ids, duration, mem_pct):
+    config = TEST_REGISTRY[test_name]
+    binary = os.path.join(BUILD_DIR, config["bin"])
+    procs = []
+    
+    for gpu in gpu_ids:
+        # Command: ./bin <gpu> <duration> <mem_pct> [args]
+        cmd = [binary, str(gpu), str(duration), str(mem_pct)] + config["args"]
+        log(f"Launching {test_name} on GPU {gpu} (Alloc: {mem_pct}% VRAM)...")
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        procs.append((gpu, p))
+
+    return procs
+
+def main():
+    parser = argparse.ArgumentParser(description="PANTHEON: Universal GPU Stress Suite")
+    parser.add_argument("--test", type=str, default="all", help=f"Test to run: {', '.join(TEST_REGISTRY.keys())} or 'all'")
+    parser.add_argument("--duration", type=int, default=30, help="Duration in seconds per test")
+    parser.add_argument("--gpu", type=str, default="all", help="Comma separated list of GPU IDs (e.g. 0,1) or 'all'")
+    parser.add_argument("--mem", type=int, default=99, help="Percentage of free VRAM to use (Default: 99)")
+    args = parser.parse_args()
+
+    # --- Setup ---
+    platform = detect_platform()
+    if platform == "UNKNOWN": sys.exit("Error: No compiler found.")
+    
+    build_kernels(platform)
+    monitor = HardwareMonitor(platform)
+    
+    # --- GPU Discovery ---
+    avail_count = monitor.get_gpu_count()
+    if args.gpu == "all":
+        target_gpus = list(range(avail_count))
+    else:
+        target_gpus = [int(x) for x in args.gpu.split(",")]
+
+    # --- Result Folder Setup ---
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_dir = os.path.join(RESULTS_BASE_DIR, timestamp_str)
+    ensure_dir(run_dir)
+    ensure_dir(DATABASE_DIR)
+    
+    log(f"Run ID: {timestamp_str}")
+
+    # --- Test Selection ---
+    if args.test == "all":
+        queue = list(TEST_REGISTRY.keys())
+    else:
+        queue = [args.test]
+
+    # --- Main Loop ---
+    final_results = []
+
+    for test in queue:
+        log(f"--- STARTING TEST: {test.upper()} ---")
+        
+        # 1. Start Monitor
+        monitor.start_collection(target_gpus)
+
+        # 2. Run Kernels
+        procs = run_test(test, target_gpus, args.duration, args.mem)
+        
+        # 3. Wait
+        try:
+            for gpu, p in procs: p.wait()
+        except KeyboardInterrupt:
+            for gpu, p in procs: p.kill()
+            break
+        
+        # 4. Stop Monitor & Get Stats
+        hw_stats = monitor.stop_collection() 
+
+        # 5. Parse Kernel Output
+        for gpu, p in procs:
+            out, err = p.communicate()
+            throughput = "N/A"
+            
+            if out:
+                for line in out.split('\n'):
+                    if "Throughput:" in line:
+                        try:
+                            throughput = float(line.split(":")[1].replace("GB/s", "").strip())
+                        except: pass
+            
+            stats = hw_stats.get(gpu, {})
+            row = {
+                "Test Name": test,
+                "Description": TEST_REGISTRY[test]["desc"],
+                "GPU ID": gpu,
+                "Duration (s)": args.duration,
+                "Mem Usage (%)": args.mem,
+                "Throughput (GB/s)": throughput,
+                "Avg Temp (C)": stats.get("avg_temp", 0),
+                "Max Temp (C)": stats.get("max_temp", 0),
+                "Avg Power (W)": stats.get("avg_pwr", 0),
+                "Max Power (W)": stats.get("max_pwr", 0),
+                "Avg Clock (MHz)": stats.get("avg_clk", 0)
+            }
+            final_results.append(row)
+            print(f"[RESULT] GPU {gpu} | {throughput} GB/s | {row['Max Temp (C)']}C Max | {row['Max Power (W)']}W Max")
+
+        log(f"--- FINISHED TEST: {test.upper()} ---\n")
+
+    # --- Report Generation ---
+    df = pd.DataFrame(final_results)
+    print("\n" + "="*80)
+    print("FINAL SUMMARY REPORT")
+    print("="*80)
+    print(df.to_string(index=False))
+    print("="*80)
+
+    # 1. Save Simple Reports (CSV/Excel) in results/ folder
+    csv_path = os.path.join(run_dir, "summary.csv")
+    xlsx_path = os.path.join(run_dir, "summary.xlsx")
+    df.to_csv(csv_path, index=False)
+    try: df.to_excel(xlsx_path, index=False)
+    except: pass
+
+    # 2. Save Full Database Snapshot (JSON) in database/ folder
+    log("Generating Database Snapshot...")
+    full_snapshot = get_system_snapshot(platform)
+    full_snapshot["test_results"] = final_results
+    
+    # Filename: pantheon_report_<timestamp>.json
+    db_file = os.path.join(DATABASE_DIR, f"pantheon_report_{timestamp_str}.json")
+    
+    with open(db_file, "w") as f:
+        json.dump(full_snapshot, f, indent=4)
+    
+    log(f"Snapshot saved to: {db_file}")
+
+if __name__ == "__main__":
+    main()
+
+
+==================================================
+FILE: ./results/20260205-012932/summary.csv
+==================================================
+Test Name,Description,GPU ID,Duration (s),Throughput (GB/s),Avg Temp (C),Max Temp (C),Avg Power (W),Max Power (W),Avg Clock (MHz)
+mem_bw,Linear Bandwidth (Standard Copy),0,30,778.341,52.2,58.0,263.4,280.2,1903.0
+hbm_virus,HBM Virus (Rail-to-Rail NT Store),0,30,774.283,61.1,65.0,278.0,287.7,1945.0
+cache_lat,Pointer Chasing (Latency Stress),0,30,N/A,66.5,69.0,255.9,262.9,1935.0
+voltage,Voltage Droop Virus (ALU Hammer),0,30,N/A,73.4,76.0,342.7,349.2,1885.0
+
+
+==================================================
+FILE: ./results/20260205-012932/summary.xlsx
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0xf2 in position 10: invalid continuation byte
+
+==================================================
+FILE: ./results/20260205-013533/summary.csv
+==================================================
+Test Name,Description,GPU ID,Duration (s),Mem Usage (%),Throughput (GB/s),Avg Temp (C),Max Temp (C),Avg Power (W),Max Power (W),Avg Clock (MHz)
+mem_bw,Linear Bandwidth (Standard Copy),0,30,99,754.412,53.4,58.0,258.8,278.4,1901.0
+hbm_virus,HBM Virus (Rail-to-Rail NT Store),0,30,99,491.863,60.2,63.0,231.0,276.5,1949.0
+cache_lat,Pointer Chasing (Latency Stress),0,30,99,N/A,62.8,64.0,188.9,200.4,1935.0
+voltage,Voltage Droop Virus (ALU Hammer),0,30,99,N/A,71.0,74.0,339.0,349.2,1886.0
+
+
+==================================================
+FILE: ./results/20260205-013533/summary.xlsx
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0xb1 in position 10: invalid start byte
+
+==================================================
+FILE: ./results/20260205-014636/summary.csv
+==================================================
+Test Name,Description,GPU ID,Duration (s),Mem Usage (%),Throughput (GB/s),Avg Temp (C),Max Temp (C),Avg Power (W),Max Power (W),Avg Clock (MHz)
+hbm_write,HBM Write (NT Store) - Max Power/Thermals,0,30,99,797.506,49.9,55.0,261.2,275.5,1903.0
+hbm_read,HBM Read (NT Load) - Max Throughput,0,30,99,851.68,59.5,64.0,280.8,292.2,1912.0
+cache_lat,Pointer Chasing (Latency Stress),0,30,99,N/A,65.3,68.0,253.1,265.1,1945.0
+voltage,Voltage Droop Virus (ALU Hammer),0,30,99,N/A,71.0,73.0,295.6,304.7,1896.0
+
+
+==================================================
+FILE: ./results/20260205-014636/summary.xlsx
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0xc7 in position 15: invalid continuation byte
+
+==================================================
+FILE: ./build/compute_virus
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0xb0 in position 24: invalid start byte
+
+==================================================
+FILE: ./build/cache_latency
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0x9b in position 209: invalid start byte
+
+==================================================
+FILE: ./build/hbm_write
+==================================================
+Error reading file: 'utf-8' codec can't decode bytes in position 24-25: invalid continuation byte
+
+==================================================
+FILE: ./build/mem_stress
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0x90 in position 24: invalid start byte
+
+==================================================
+FILE: ./build/hbm_read
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0xb7 in position 25: invalid start byte
+
+==================================================
+FILE: ./build/voltage_stress
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0xb0 in position 24: invalid start byte
+
+==================================================
+FILE: ./build/cache_stress
+==================================================
+Error reading file: 'utf-8' codec can't decode byte 0x9b in position 209: invalid start byte
+
+==================================================
+FILE: ./kernels/common/hip_shim.h
+==================================================
+#ifndef HIP_SHIM_H
+#define HIP_SHIM_H
+
+// If compiling with NVCC (NVIDIA), map HIP -> CUDA
+#ifdef __CUDACC__
+    #include <cuda_runtime.h>
+    #include <device_launch_parameters.h>
+    #include <iostream>
+
+    // 1. Rename Types
+    #define hipError_t cudaError_t
+    #define hipSuccess cudaSuccess
+    #define hipDeviceProp_t cudaDeviceProp
+    #define hipGetErrorString cudaGetErrorString
+    #define hipStream_t cudaStream_t
+
+    // 2. Rename Functions
+    #define hipSetDevice cudaSetDevice
+    #define hipGetDeviceProperties cudaGetDeviceProperties
+    #define hipMalloc cudaMalloc
+    #define hipFree cudaFree
+    #define hipMemcpy cudaMemcpy
+    #define hipMemcpyDeviceToHost cudaMemcpyDeviceToHost
+    #define hipMemGetInfo cudaMemGetInfo
+    #define hipDeviceSynchronize cudaDeviceSynchronize
+    #define hipStreamCreate cudaStreamCreate
+    #define hipStreamDestroy cudaStreamDestroy
+    #define hipStreamSynchronize cudaStreamSynchronize
+
+    // 3. Handle Kernel Launch Syntax if needed (usually compatible)
+    
+#else
+    // If compiling with HIPCC (AMD), just use standard HIP
+    #include <hip/hip_runtime.h>
+#endif
+
+#endif // HIP_SHIM_H
+
+
+==================================================
+FILE: ./kernels/common/common.h
+==================================================
+#ifndef PANTHEON_COMMON_H
+#define PANTHEON_COMMON_H
+
+#include "../common/hip_shim.h" 
+#include <iostream>
+#include <cstdlib>
+
+#define BLOCK_SIZE 256
+
+#define CHECK(cmd) \
+{ \
+    hipError_t error = cmd; \
+    if (error != hipSuccess) { \
+        std::cerr << "[PANTHEON ERROR] Code: " << error \
+                  << " (" << hipGetErrorString(error) << ")" \
+                  << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
+        exit(1); \
+    } \
+}
+
+// --- Non-Temporal Store (Bypass Cache & Write to HBM) ---
+__device__ __forceinline__ void store_nt(void* addr, uint4 val) {
+#ifdef __HIP_PLATFORM_AMD__
+    typedef unsigned int __attribute__((vector_size(16))) vec_uint4;
+    __builtin_nontemporal_store(*(vec_uint4*)&val, (vec_uint4*)addr);
+#elif defined(__CUDACC__)
+    asm volatile("st.global.cs.v4.u32 [%0], {%1, %2, %3, %4};" 
+                 :: "l"(addr), "r"(val.x), "r"(val.y), "r"(val.z), "r"(val.w));
+#else
+    *(uint4*)addr = val;
+#endif
+}
+
+// --- Non-Temporal Load (Bypass Cache & Read from HBM) ---
+__device__ __forceinline__ uint4 load_nt(void* addr) {
+    uint4 ret;
+#ifdef __HIP_PLATFORM_AMD__
+    typedef unsigned int __attribute__((vector_size(16))) vec_uint4;
+    vec_uint4 v = __builtin_nontemporal_load((vec_uint4*)addr);
+    ret = *(uint4*)&v;
+#elif defined(__CUDACC__)
+    asm volatile("ld.global.cs.v4.u32 {%0, %1, %2, %3}, [%4];" 
+                 : "=r"(ret.x), "=r"(ret.y), "=r"(ret.z), "=r"(ret.w) : "l"(addr));
+#else
+    ret = *(uint4*)addr;
+#endif
+    return ret;
+}
+
+#endif // PANTHEON_COMMON_H
+
+
+==================================================
+FILE: ./kernels/compute_virus/compute_virus.cpp
+==================================================
+#include "../common/common.h"
+#include <chrono>
+
+// --- VOLTAGE VIRUS KERNEL ---
+// Uses volatile math to force rapid ALU state switching (0->1->0)
+// This targets the Logic Rail (VDD_GFX) to induce di/dt droop.
+__global__ void voltage_droop_kernel(int iters, float* sink) {
+    size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    // Volatile prevents the compiler from pre-calculating the result
+    volatile float a = 1.0f; 
+    volatile float b = -1.0f;
+    volatile float c = 0.5f;
+    volatile float d = -0.5f;
+
+    for(int i=0; i<iters; ++i) {
+        // FMA (Fused Multiply Add) Chain
+        // High power consumption density on both CDNA and Volta+ arch
+        #ifdef __HIP_PLATFORM_AMD__
+            a = __builtin_fma(a, b, c);
+            b = __builtin_fma(b, c, d);
+            c = __builtin_fma(c, d, a);
+            d = __builtin_fma(d, a, b);
+        #else
+            // Standard C++ FMA (CUDA maps this to hardware FMA)
+            a = fmaf(a, b, c);
+            b = fmaf(b, c, d);
+            c = fmaf(c, d, a);
+            d = fmaf(d, a, b);
+        #endif
+        
+        // Polarity Shock: Flip signs every 16 ops to maximize bit toggles
+        if ((i & 0xF) == 0) {
+            a = -a;
+            b = -b;
+        }
+    }
+
+    // Write to sink once at the end to keep the dependency chain alive
+    if (a + b + c + d == 12345.0f) {
+        sink[tid] = a;
+    }
+}
+
+int main(int argc, char* argv[]) {
+    // Expected args: ./bin <gpu> <duration> <mem_pct>
+    if (argc < 4) return 1;
+    
+    int gpu_id = atoi(argv[1]);
+    int duration = atoi(argv[2]);
+    // int mem_pct = atoi(argv[3]); // Ignored: This test is Compute Bound
+
+    CHECK(hipSetDevice(gpu_id));
+    
+    // Small allocation just for the sink (results)
+    float* d_sink;
+    CHECK(hipMalloc(&d_sink, 1024 * sizeof(float)));
+
+    // Maximum Occupancy Strategy
+    // We want every Compute Unit (CU) to be hammering the ALUs
+    hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
+    int num_blocks = prop.multiProcessorCount * 16; 
+
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": Running VOLTAGE DROOP VIRUS (ALU Hammer)..." << std::endl;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // Main Stress Loop
+    while(true) {
+        // Run a heavy batch of instructions
+        voltage_droop_kernel<<<num_blocks, BLOCK_SIZE>>>(20000, d_sink);
+        CHECK(hipDeviceSynchronize());
+        
+        auto now = std::chrono::high_resolution_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
+    }
+    
+    CHECK(hipFree(d_sink));
+    return 0;
+}
+
+
+==================================================
+FILE: ./kernels/cache_latency/cache_latency.cpp
+==================================================
+#include "../common/common.h"
+#include <vector>
+#include <chrono>
+
+// Linear Congruential Generator constants for full-period traversal
+// This ensures we visit every slot exactly once in random order.
+#define LCG_A 1664525
+#define LCG_C 1013904223
+
+// --- INITIALIZATION KERNEL ---
+// Pre-calculates the "Next Hop" index for every memory slot
+__global__ void init_lcg_kernel(size_t* data, size_t n) {
+    size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t stride = blockDim.x * gridDim.x;
+    
+    // data[i] = (A*i + C) % n
+    // Since n is a power of 2, we use bitwise AND for modulo
+    for (size_t i = tid; i < n; i += stride) {
+        data[i] = (LCG_A * i + LCG_C) & (n - 1); 
+    }
+}
+
+// --- STRESS KERNEL (POINTER CHASER) ---
+// Forces the GPU to wait for memory latency on every instruction.
+// Cannot be prefetched by hardware.
+__global__ void latency_kernel(size_t* data, size_t n, int loops, size_t* sink) {
+    size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (tid < n) {
+        size_t idx = tid;
+        
+        // Critical dependency path: idx = data[idx]
+        for (int i = 0; i < loops; ++i) {
+            idx = data[idx];
+        }
+        
+        sink[tid] = idx;
+    }
+}
+
+int main(int argc, char* argv[]) {
+    // Expected args: ./bin <gpu> <duration> <mem_pct>
+    if (argc < 4) return 1;
+    
+    int gpu_id = atoi(argv[1]);
+    int duration = atoi(argv[2]);
+    int mem_pct = atoi(argv[3]);
+
+    CHECK(hipSetDevice(gpu_id));
+
+    // Dynamic Allocation based on %
+    // For latency tests, we just need > L2 Cache Size (usually > 128MB).
+    // Using 99% forces the random walk to cross ALL memory channels/banks/stacks.
+    size_t free, total;
+    CHECK(hipMemGetInfo(&free, &total));
+    if (mem_pct > 99) mem_pct = 99;
+    if (mem_pct < 1) mem_pct = 1;
+    
+    // Align to power of 2 for fast LCG modulo
+    size_t raw_size = (free * mem_pct) / 100;
+    size_t num_elements = 1;
+    while (num_elements * 2 * sizeof(size_t) <= raw_size) {
+        num_elements *= 2;
+    }
+    
+    size_t alloc_size = num_elements * sizeof(size_t);
+
+    size_t* d_data; CHECK(hipMalloc(&d_data, alloc_size));
+    size_t* d_sink; CHECK(hipMalloc(&d_sink, alloc_size));
+
+    // Grid config
+    hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
+    int num_blocks = prop.multiProcessorCount * 4; 
+
+    // 1. Initialize Random Table
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": Init Random Walk on " 
+              << alloc_size / (1024*1024) << " MB (" << num_elements << " nodes)..." << std::endl;
+              
+    init_lcg_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements);
+    CHECK(hipDeviceSynchronize());
+
+    // 2. Run Stress
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": Running CACHE LATENCY STRESS..." << std::endl;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // Inner loops: High count to minimize kernel launch overhead
+    int inner_loops = 10000; 
+
+    while (true) {
+        latency_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements, inner_loops, d_sink);
+        CHECK(hipDeviceSynchronize());
+        
+        auto now = std::chrono::high_resolution_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
+    }
+
+    CHECK(hipFree(d_data));
+    CHECK(hipFree(d_sink));
+    return 0;
+}
+
+
+==================================================
+FILE: ./kernels/hbm_write/hbm_write.cpp
+==================================================
+#include "../common/common.h"
+#include <vector>
+#include <chrono>
+
+// --- WRITE KERNEL ---
+// Uses Non-Temporal Stores to fill HBM bandwidth without polluting L2
+__global__ void hbm_write_kernel(uint4* data, size_t n) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t stride = blockDim.x * gridDim.x;
+
+    // Rail-to-Rail Pattern (0x00 <-> 0xFF)
+    uint4 p0 = make_uint4(0x00000000, 0x00000000, 0x00000000, 0x00000000);
+    uint4 p1 = make_uint4(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF);
+
+    // Unroll 16x
+    for (size_t i = idx; i + stride * 15 < n; i += stride * 16) {
+        store_nt(&data[i], p0);
+        store_nt(&data[i+stride], p1);
+        store_nt(&data[i+stride*2], p0);
+        store_nt(&data[i+stride*3], p1);
+        store_nt(&data[i+stride*4], p0);
+        store_nt(&data[i+stride*5], p1);
+        store_nt(&data[i+stride*6], p0);
+        store_nt(&data[i+stride*7], p1);
+        store_nt(&data[i+stride*8], p0);
+        store_nt(&data[i+stride*9], p1);
+        store_nt(&data[i+stride*10], p0);
+        store_nt(&data[i+stride*11], p1);
+        store_nt(&data[i+stride*12], p0);
+        store_nt(&data[i+stride*13], p1);
+        store_nt(&data[i+stride*14], p0);
+        store_nt(&data[i+stride*15], p1);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 4) return 1;
+    int gpu_id = atoi(argv[1]);
+    int duration = atoi(argv[2]);
+    int mem_pct = atoi(argv[3]);
+
+    CHECK(hipSetDevice(gpu_id));
+
+    size_t free, total;
+    CHECK(hipMemGetInfo(&free, &total));
+    if (mem_pct > 99) mem_pct = 99;
+    size_t alloc_size = (free * mem_pct) / 100;
+    size_t num_elements = alloc_size / 16; 
+
+    void* d_data;
+    CHECK(hipMalloc(&d_data, alloc_size));
+
+    // Oversubscribe CUs
+    hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
+    int num_blocks = prop.multiProcessorCount * 20;
+
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM WRITE (NT Store) | " 
+              << mem_pct << "% VRAM | " << duration << "s" << std::endl;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+    size_t bytes_transferred = 0;
+
+    while (true) {
+        hbm_write_kernel<<<num_blocks, BLOCK_SIZE>>>((uint4*)d_data, num_elements);
+        CHECK(hipDeviceSynchronize());
+        
+        bytes_transferred += alloc_size; // Write only
+
+        auto now = std::chrono::high_resolution_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
+    }
+
+    double seconds = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start_time).count();
+    std::cout << "Throughput: " << (bytes_transferred / 1e9) / seconds << " GB/s" << std::endl;
+
+    CHECK(hipFree(d_data));
+    return 0;
+}
+
+
+==================================================
+FILE: ./kernels/hbm_read/hbm_read.cpp
+==================================================
+#include "../common/common.h"
+#include <vector>
+#include <chrono>
+
+// --- READ KERNEL ---
+// Uses Non-Temporal Loads. Sums data to prevent optimization.
+__global__ void hbm_read_kernel(uint4* data, size_t n, uint4* sink) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t stride = blockDim.x * gridDim.x;
+
+    // Accumulators (Break dependency chains)
+    unsigned int acc = 0;
+
+    for (size_t i = idx; i + stride * 3 < n; i += stride * 4) {
+        uint4 v0 = load_nt(&data[i]);
+        uint4 v1 = load_nt(&data[i+stride]);
+        uint4 v2 = load_nt(&data[i+stride*2]);
+        uint4 v3 = load_nt(&data[i+stride*3]);
+
+        // Minimal logic to keep data alive
+        acc += v0.x + v1.x + v2.x + v3.x;
+    }
+
+    // Write to sink (one per thread)
+    if (acc == 0xDEADBEEF) sink[idx] = make_uint4(acc, 0, 0, 0);
+}
+
+// Helper to init memory so reads aren't checking zeros
+__global__ void init_data(uint4* data, size_t n) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t stride = blockDim.x * gridDim.x;
+    uint4 val = make_uint4(1, 2, 3, 4);
+    for (size_t i = idx; i < n; i += stride) data[i] = val;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 4) return 1;
+    int gpu_id = atoi(argv[1]);
+    int duration = atoi(argv[2]);
+    int mem_pct = atoi(argv[3]);
+
+    CHECK(hipSetDevice(gpu_id));
+
+    size_t free, total;
+    CHECK(hipMemGetInfo(&free, &total));
+    if (mem_pct > 99) mem_pct = 99;
+    size_t alloc_size = (free * mem_pct) / 100;
+    size_t num_elements = alloc_size / 16; 
+
+    uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
+    uint4* d_sink; CHECK(hipMalloc(&d_sink, alloc_size)); // Sink matches size to avoid bounds checks
+
+    hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
+    int num_blocks = prop.multiProcessorCount * 20;
+
+    // Init Data
+    init_data<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements);
+    CHECK(hipDeviceSynchronize());
+
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM READ (NT Load) | " 
+              << mem_pct << "% VRAM | " << duration << "s" << std::endl;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+    size_t bytes_transferred = 0;
+
+    while (true) {
+        hbm_read_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements, d_sink);
+        CHECK(hipDeviceSynchronize());
+        
+        bytes_transferred += alloc_size; // Read only
+
+        auto now = std::chrono::high_resolution_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
+    }
+
+    double seconds = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start_time).count();
+    std::cout << "Throughput: " << (bytes_transferred / 1e9) / seconds << " GB/s" << std::endl;
+
+    CHECK(hipFree(d_data));
+    CHECK(hipFree(d_sink));
+    return 0;
+}
+
