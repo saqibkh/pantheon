@@ -343,7 +343,12 @@ def main():
                 "Max Temp (C)": stats.get("max_temp", 0),
                 "Avg Power (W)": stats.get("avg_pwr", 0),
                 "Max Power (W)": stats.get("max_pwr", 0),
-                "Avg Clock (MHz)": stats.get("avg_clk", 0)
+                "Avg Clock (MHz)": stats.get("avg_clk", 0),
+
+                "Max Mem Temp (C)": stats.get("max_mem_temp", 0),
+                "Max Fan (%)": stats.get("max_fan", 0),
+                "Volts Core (mV)": stats.get("max_volts_core", 0),
+                "Volts SoC (mV)": stats.get("max_volts_soc", 0)
             }
             final_results.append(row)
             print(f"[RESULT] GPU {gpu} | {throughput} GB/s | {row['Max Temp (C)']}C Max | {row['Max Power (W)']}W Max")
@@ -352,13 +357,18 @@ def main():
 
     # --- Report Generation ---
     df = pd.DataFrame(final_results)
+    
     print("\n" + "="*80)
     print("FINAL SUMMARY REPORT")
     print("="*80)
-    print(df.drop(columns=["Description"]).to_string(index=False))
+    
+    # CONSOLE: Drop the new noisy columns + Description
+    cols_to_hide = ["Description", "Max Mem Temp (C)", "Max Fan (%)", "Volts Core (mV)", "Volts SoC (mV)"]
+    print(df.drop(columns=cols_to_hide, errors='ignore').to_string(index=False))
+    
     print("="*80)
 
-    # 1. Save Simple Reports (CSV/Excel) in results/ folder
+    # FILES: Save EVERYTHING (including new metrics)
     csv_path = os.path.join(run_dir, "summary.csv")
     xlsx_path = os.path.join(run_dir, "summary.xlsx")
     df.to_csv(csv_path, index=False)

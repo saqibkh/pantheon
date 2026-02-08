@@ -35,14 +35,12 @@ class HardwareMonitor:
     def get_gpu_count(self):
         if self.platform == "HIP" and self.has_rocm_smi:
             try:
-                # AMD: Count keys in JSON output
                 out = subprocess.check_output("rocm-smi -i --json", shell=True).decode()
                 return len(json.loads(out))
             except: return 1
         elif self.has_nvidia_smi:
             if self.nvml_active:
-                try:
-                    return pynvml.nvmlDeviceGetCount()
+                try: return pynvml.nvmlDeviceGetCount()
                 except: return 1
             else:
                 try:
@@ -53,12 +51,22 @@ class HardwareMonitor:
 
     def start_collection(self, gpu_ids, output_dir="."):
         self.running = True
-        self.history = {gid: {'temp': [], 'pwr': [], 'clk': []} for gid in gpu_ids}
+        # Expanded Schema for new metrics
+        self.history = {gid: {
+            'temp_core': [], 'temp_mem': [], 
+            'pwr': [], 'clk_core': [], 
+            'fan_pct': [], 'volts_core': [], 'volts_soc': []
+        } for gid in gpu_ids}
         
-        # Initialize CSV Logging
         self.csv_file = open(os.path.join(output_dir, "time_series.csv"), "w", newline="")
         self.csv_writer = csv.writer(self.csv_file)
-        self.csv_writer.writerow(["Timestamp", "GPU_ID", "Temp_C", "Power_W", "Clock_MHz"])
+        # Expanded Header for CSV Analysis
+        self.csv_writer.writerow([
+            "Timestamp", "GPU_ID", 
+            "Temp_Core(C)", "Temp_Mem(C)", 
+            "Power(W)", "Clock(MHz)", 
+            "Fan(%)", "Volts_Core(mV)", "Volts_SoC(mV)"
+        ])
         
         self.thread = threading.Thread(target=self._loop, args=(gpu_ids,))
         self.thread.start()
@@ -66,28 +74,30 @@ class HardwareMonitor:
     def _loop(self, gpu_ids):
         start_t = time.time()
         while self.running:
-            # Poll Data
             if self.platform == "HIP" and self.has_rocm_smi:
                 self._poll_amd(gpu_ids)
             elif self.has_nvidia_smi:
                 self._poll_nvidia(gpu_ids)
             
-            # Log to CSV (Real-time)
             elapsed = round(time.time() - start_t, 2)
             for gid in gpu_ids:
-                if gid in self.history and self.history[gid]['temp']:
-                    # Get latest values
-                    t = self.history[gid]['temp'][-1]
-                    p = self.history[gid]['pwr'][-1] if self.history[gid]['pwr'] else 0
-                    c = self.history[gid]['clk'][-1] if self.history[gid]['clk'] else 0
-                    self.csv_writer.writerow([elapsed, gid, t, p, c])
+                h = self.history[gid]
+                if h['temp_core']:
+                    # Safe retrieval with defaults
+                    t_c = h['temp_core'][-1]
+                    t_m = h['temp_mem'][-1] if h['temp_mem'] else 0
+                    p   = h['pwr'][-1] if h['pwr'] else 0
+                    c   = h['clk_core'][-1] if h['clk_core'] else 0
+                    f   = h['fan_pct'][-1] if h['fan_pct'] else 0
+                    v_c = h['volts_core'][-1] if h['volts_core'] else 0
+                    v_s = h['volts_soc'][-1] if h['volts_soc'] else 0
+                    
+                    self.csv_writer.writerow([elapsed, gid, t_c, t_m, p, c, f, v_c, v_s])
             
             self.csv_file.flush()
             time.sleep(1)
         
         self.csv_file.close()
-        
-        # Shutdown NVML on exit if active
         if self.nvml_active:
             try: pynvml.nvmlShutdown()
             except: pass
@@ -99,83 +109,99 @@ class HardwareMonitor:
 
     def _poll_amd(self, gpu_ids):
         try:
-            # -P (Power), -t (Temp), -c (Clock), -m (Mem Clock)
-            out = subprocess.check_output("rocm-smi -P -t -c -m --json", shell=True).decode()
+            # -v (Voltage), -P (Power), -t (Temp), -c (Clock), -f (Fan)
+            out = subprocess.check_output("rocm-smi -v -P -t -c -f --json", shell=True).decode()
             data = json.loads(out)
             
             for gid in gpu_ids:
-                # card0, card1... or gpu0... try to find the key
                 card_key = f"card{gid}"
                 keys = list(data.keys())
-                
-                # Robust Key Finding
                 if card_key not in data: 
                     if len(keys) > gid: card_key = keys[gid]
                 
                 if card_key in data:
                     c = data[card_key]
-                    
-                    # 1. Temperature (Prioritize HBM/Junction, Fallback to Edge)
-                    t_val = 0
-                    for k, v in c.items():
-                        k_lower = k.lower()
-                        if "temp" in k_lower and "edge" in k_lower: 
-                            t_val = float(v) # Baseline
-                        if "temp" in k_lower and ("junction" in k_lower or "hotspot" in k_lower or "hbm" in k_lower):
-                            t_val = float(v) # Upgrade to hotspot if found
-                            break
-                    if t_val > 0: self.history[gid]['temp'].append(t_val)
+                    h = self.history[gid]
 
-                    # 2. Power
-                    p_val = 0
+                    # 1. Temperatures (Core vs Mem)
+                    t_core = 0; t_mem = 0
                     for k, v in c.items():
-                        if "power" in k.lower() and "average" in k.lower():
-                            p_val = float(v)
-                            break
-                        if "power" in k.lower() and float(v) > p_val:
-                            p_val = float(v)
-                    if p_val > 0: self.history[gid]['pwr'].append(p_val)
+                        kl = k.lower()
+                        if "temp" in kl:
+                            val = float(v)
+                            if "edge" in kl: t_core = val
+                            # HBM / Junction / Mem
+                            if "hbm" in kl or "mem" in kl or "junction" in kl: 
+                                t_mem = max(t_mem, val) # Take hottest
+                    h['temp_core'].append(t_core)
+                    h['temp_mem'].append(t_mem)
 
-                    # 3. Clock (SCLK or MCLK)
-                    clk_val = 0
+                    # 2. Voltages (Core vs SoC)
+                    # AMD usually labels them v0 (GFX) and v1 (SoC/Mem)
+                    v_core = 0; v_soc = 0
                     for k, v in c.items():
+                        kl = k.lower()
+                        if "voltage" in kl:
+                            val = float(v) # usually in mV
+                            if "0" in kl or "gfx" in kl: v_core = val
+                            if "1" in kl or "soc" in kl: v_soc = val
+                    h['volts_core'].append(v_core)
+                    h['volts_soc'].append(v_soc)
+
+                    # 3. Fan
+                    f_pct = 0
+                    for k, v in c.items():
+                        if "fan" in k.lower() and "%" in str(k):
+                            f_pct = float(v)
+                    h['fan_pct'].append(f_pct)
+
+                    # 4. Power/Clock (Standard)
+                    p_val = 0; clk_val = 0
+                    for k, v in c.items():
+                        if "power" in k.lower() and "average" in k.lower(): p_val = float(v)
                         if "sclk" in k.lower() and "(" in str(v):
-                            # Format: "(1200Mhz)"
-                            clean = str(v).replace("(", "").replace(")", "").replace("Mhz", "")
-                            clk_val = float(clean)
-                            break
-                    if clk_val > 0: self.history[gid]['clk'].append(clk_val)
+                             clean = str(v).replace("(", "").replace(")", "").replace("Mhz", "")
+                             clk_val = float(clean)
+                    h['pwr'].append(p_val)
+                    h['clk_core'].append(clk_val)
 
-        except Exception as e:
-            pass
+        except Exception as e: pass
 
     def _poll_nvidia(self, gpu_ids):
-        # PATH A: Native NVML (Fast)
         if self.nvml_active:
             try:
                 for gid in gpu_ids:
                     handle = pynvml.nvmlDeviceGetHandleByIndex(gid)
+                    h = self.history[gid]
                     
-                    # Temp
-                    temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-                    self.history[gid]['temp'].append(temp)
+                    # Temp: Core
+                    h['temp_core'].append(pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU))
                     
-                    # Power (mW -> W)
+                    # Temp: Memory (If available, usually returns 0 or Error on older cards)
                     try:
-                        pwr = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
-                    except: pwr = 0
-                    self.history[gid]['pwr'].append(pwr)
+                        # 2 = NVML_TEMPERATURE_MEM (Not exposed in older pynvml, hardcoding integer)
+                        h['temp_mem'].append(pynvml.nvmlDeviceGetTemperature(handle, 2)) 
+                    except: 
+                        h['temp_mem'].append(0)
+
+                    # Power
+                    try: h['pwr'].append(pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0)
+                    except: h['pwr'].append(0)
                     
-                    # Clock (MHz)
-                    try:
-                        clk = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
-                    except: clk = 0
-                    self.history[gid]['clk'].append(clk)
-            except: 
-                pass
-        
-        # PATH B: Legacy CLI Parsing (Slow Fallback)
+                    # Clock
+                    try: h['clk_core'].append(pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS))
+                    except: h['clk_core'].append(0)
+
+                    # Fan Speed
+                    try: h['fan_pct'].append(pynvml.nvmlDeviceGetFanSpeed(handle))
+                    except: h['fan_pct'].append(0)
+
+                    # Voltage (NVIDIA rarely exposes this via NVML, usually 0)
+                    h['volts_core'].append(0)
+                    h['volts_soc'].append(0)
+            except: pass
         else:
+            # Fallback for CLI (NVIDIA) - Only Basic Metrics to prevent slow parsing
             try:
                 cmd = "nvidia-smi --query-gpu=index,temperature.gpu,power.draw,clocks.gr --format=csv,noheader,nounits"
                 out = subprocess.check_output(cmd, shell=True).decode()
@@ -183,37 +209,39 @@ class HardwareMonitor:
                     parts = line.split(',')
                     idx = int(parts[0])
                     if idx in self.history:
-                        self.history[idx]['temp'].append(float(parts[1]))
+                        self.history[idx]['temp_core'].append(float(parts[1]))
                         self.history[idx]['pwr'].append(float(parts[2]))
-                        self.history[idx]['clk'].append(float(parts[3]))
+                        self.history[idx]['clk_core'].append(float(parts[3]))
             except: pass
+
 
     def _aggregate(self):
         stats = {}
         for gid, data in self.history.items():
-            # Calculate Averages/Max
-            avg_temp = round(np.mean(data['temp']), 1) if data['temp'] else 0
-            max_temp = round(np.max(data['temp']), 1) if data['temp'] else 0
-            avg_pwr  = round(np.mean(data['pwr']), 1) if data['pwr'] else 0
-            max_pwr  = round(np.max(data['pwr']), 1) if data['pwr'] else 0
-            avg_clk  = round(np.mean(data['clk']), 0) if data['clk'] else 0
-            max_clk  = round(np.max(data['clk']), 0) if data['clk'] else 0
+            # Helper for safe max/mean
+            def safe_max(l): return round(np.max(l), 1) if l else 0
+            def safe_mean(l): return round(np.mean(l), 1) if l else 0
 
-            # --- Throttling Detection ---
-            # Heuristic: If we hit high temps (>80C) and average clock is 
-            # significantly lower (<85%) than max clock, we are likely throttling.
+            avg_clk = safe_mean(data['clk_core'])
+            max_clk = safe_max(data['clk_core'])
+            max_temp = safe_max(data['temp_core'])
+
+            # Throttling Heuristic
             throttled = False
             if max_temp > 80 and max_clk > 0:
                 if avg_clk < (max_clk * 0.85):
                     throttled = True
 
             stats[gid] = {
-                "avg_temp": avg_temp,
+                "avg_temp": safe_mean(data['temp_core']),
                 "max_temp": max_temp,
-                "avg_pwr":  avg_pwr,
-                "max_pwr":  max_pwr,
+                "max_mem_temp": safe_max(data['temp_mem']), # <--- Captured but will be used for file only
+                "avg_pwr":  safe_mean(data['pwr']),
+                "max_pwr":  safe_max(data['pwr']),
                 "avg_clk":  avg_clk,
-                "max_clk":  max_clk,
-                "throttled": throttled
+                "throttled": throttled,
+                "max_fan": safe_max(data['fan_pct']),       # <--- Captured but will be used for file only
+                "max_volts_core": safe_max(data['volts_core']), # <--- Captured but will be used for file only
+                "max_volts_soc": safe_max(data['volts_soc'])    # <--- Captured but will be used for file only
             }
         return stats
