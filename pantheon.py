@@ -53,8 +53,9 @@ TEST_REGISTRY = {
     "voltage":        {"bin": "compute_virus",   "args": [], "desc": "Voltage Virus (ALU Hammer)"},
     "incinerator":    {"bin": "compute_virus_agg","args": [],"desc": "Incinerator (LDS Stress)"},
     "cache_lat":      {"bin": "cache_latency",   "args": [], "desc": "Cache Latency"},
-
-    # NEW TESTS
+    "sfu_stress":     {"bin": "sfu_stress",      "args": [], "desc": "SFU Virus (Transcendental Math)"},
+    "pcie_bandwidth": {"bin": "pcie_bandwidth",  "args": [], "desc": "PCIe Thrasher (Host <-> Device)"},
+    "pulse_virus":    {"bin": "pulse_virus",     "args": [], "desc": "Transient Pulse (VRM Attack 10Hz)"},
     "tensor_virus":   {"bin": "tensor_virus",    "args": [], "desc": "Tensor Virus (FP16 Matrix Power)"},
     "atomic_virus":   {"bin": "atomic_virus",    "args": [], "desc": "Atomic Virus (L2 Cache Thrash)"}
 }
