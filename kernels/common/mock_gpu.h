@@ -25,23 +25,21 @@ typedef uint4_ uint4;
 typedef float2_ float2;
 
 // --- MOCK QUALIFIERS ---
-// Define these as empty strings so g++ ignores them
 #define __global__
 #define __device__
 #define __host__
-#define __shared__              // <--- ADD THIS LINE (Fixes compute_virus_agg error)
+#define __shared__
 #define __forceinline__ inline
 #define __launch_bounds__(x)
 
 // --- MOCK THREADING ---
-// We simulate 1 thread per block for logic testing
 struct uint3 { unsigned int x, y, z; };
 static uint3 threadIdx = {0,0,0};
 static uint3 blockIdx = {0,0,0};
 static uint3 blockDim = {1,1,1};
 static uint3 gridDim = {1,1,1};
 
-inline void __syncthreads() {} // No-op for single thread
+inline void __syncthreads() {} 
 
 // --- MOCK API ---
 inline hipError_t hipSetDevice(int dev) { return hipSuccess; }
@@ -93,6 +91,14 @@ inline float __hneg2(float a) { return -a; }
 inline float2 __half22float2(float a) { return {a, a}; }
 inline uint4 make_uint4(unsigned int x, unsigned int y, unsigned int z, unsigned int w) { return {x,y,z,w}; }
 inline void atomicAdd(unsigned int* address, int val) { *address += val; }
+
+// --- FIX: ADD MISSING MATH INTRINSICS ---
+// These map GPU intrinsics to standard CPU math functions
+inline float rsqrtf(float x) { return 1.0f / sqrtf(x); }
+inline float __sinf(float x) { return sinf(x); }
+inline float __cosf(float x) { return cosf(x); }
+inline float __expf(float x) { return expf(x); }
+inline float __logf(float x) { return logf(x); }
 
 // --- AUTO-MAGIC LEAK CHECKER ---
 struct MockLeakDetector {
