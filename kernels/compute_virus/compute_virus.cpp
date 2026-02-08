@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
     // Main Stress Loop
     while(true) {
         // Run a heavy batch of instructions
-        voltage_droop_kernel<<<num_blocks, BLOCK_SIZE>>>(20000, d_sink);
+        LAUNCH_KERNEL(voltage_droop_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
         CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();

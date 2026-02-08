@@ -1,0 +1,52 @@
+name: Pantheon CI
+
+on: [push, pull_request]
+
+jobs:
+  # --- METHOD 2: COMPILE CHECK (NVIDIA) ---
+  # Verifies that code is valid CUDA/HIP code using real NVCC.
+  compile-verification:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:12.3.1-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Tools
+        run: apt-get update && apt-get install -y python3 build-essential
+
+      - name: Compile All Kernels (Dry Run)
+        # We manually invoke make. Since we are in an NVIDIA container, 
+        # PLATFORM=CUDA will be detected or forced.
+        run: |
+          make PLATFORM=CUDA
+          echo "Compilation Successful!"
+
+  # --- METHOD 1: CPU MOCK SIMULATION ---
+  # Compiles with g++ (pretending to be GPU) and actually RUNS the code.
+  cpu-logic-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Python Deps
+        run: pip3 install numpy pandas psutil openpyxl
+
+      - name: Compile with Mock
+        # We define PANTHEON_MOCK to trigger the CPU headers
+        # We use -x c++ to force g++ to treat .cu/.cpp files as standard C++
+        run: |
+          mkdir -p build
+          # Example: Compile hbm_read using g++ and Mock Header
+          g++ -DPANTHEON_MOCK -Ikernels/common -O3 kernels/hbm_read/hbm_read.cpp -o build/hbm_read
+          
+          # You can add a loop here to compile all of them:
+          # for f in kernels/*/*.cpp; do 
+          #   name=$(basename $f .cpp)
+          #   g++ -DPANTHEON_MOCK -Ikernels/common -O3 $f -o build/$name
+          # done
+
+      - name: Run Test Logic
+        # This actually executes the binary on the GitHub CPU runner!
+        run: |
+          # Fake args: GPU_ID=0, Duration=2s, Mem=1%
+          ./build/hbm_read 0 2 1

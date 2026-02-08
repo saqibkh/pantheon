@@ -288,18 +288,19 @@ class HardwareMonitor:
         self.has_rocm_smi = shutil.which("rocm-smi") is not None
         self.has_nvidia_smi = shutil.which("nvidia-smi") is not None
         self.running = False
-        self.history = {} # {gpu_id: {'temp': [], 'pwr': [], 'clk': []}}
+        self.history = {} 
         self.thread = None
 
     def get_gpu_count(self):
         if self.platform == "HIP" and self.has_rocm_smi:
             try:
-                out = subprocess.check_output("rocm-smi -i --json", shell=True)
+                # AMD: Count keys in JSON output
+                out = subprocess.check_output("rocm-smi -i --json", shell=True).decode()
                 return len(json.loads(out))
             except: return 1
         elif self.has_nvidia_smi:
             try:
-                out = subprocess.check_output("nvidia-smi --query-gpu=count --format=csv,noheader", shell=True)
+                out = subprocess.check_output("nvidia-smi --query-gpu=count --format=csv,noheader", shell=True).decode()
                 return int(out.strip())
             except: return 1
         return 1
@@ -325,21 +326,55 @@ class HardwareMonitor:
 
     def _poll_amd(self, gpu_ids):
         try:
-            out = subprocess.check_output("rocm-smi -P -t -c --json", shell=True)
+            # -P (Power), -t (Temp), -c (Clock), -m (Mem Clock)
+            out = subprocess.check_output("rocm-smi -P -t -c -m --json", shell=True).decode()
             data = json.loads(out)
+            
             for gid in gpu_ids:
-                key = f"card{gid}"
-                if key in data:
-                    c = data[key]
-                    try:
-                        self.history[gid]['temp'].append(float(c.get("Temperature (Sensor edge)", 0)))
-                        self.history[gid]['pwr'].append(float(c.get("Average Power", 0)))
-                        # Clock string might be like "(1200Mhz)"
-                        clk_raw = c.get("sclk clock speed:", "(0Mhz)")
-                        clk = float(clk_raw.replace("(", "").replace(")", "").replace("Mhz", ""))
-                        self.history[gid]['clk'].append(clk)
-                    except: pass
-        except: pass
+                # card0, card1... or gpu0... try to find the key
+                card_key = f"card{gid}"
+                if card_key not in data: 
+                    # Try finding by index if cardN naming fails
+                    keys = list(data.keys())
+                    if len(keys) > gid: card_key = keys[gid]
+                
+                if card_key in data:
+                    c = data[card_key]
+                    
+                    # --- ROBUST KEY SEARCH ---
+                    # 1. Temperature (Prioritize HBM/Junction, Fallback to Edge)
+                    t_val = 0
+                    for k, v in c.items():
+                        k_lower = k.lower()
+                        if "temp" in k_lower and "edge" in k_lower: 
+                            t_val = float(v) # Baseline
+                        if "temp" in k_lower and ("junction" in k_lower or "hotspot" in k_lower or "hbm" in k_lower):
+                            t_val = float(v) # Upgrade to hotspot if found
+                            break
+                    if t_val > 0: self.history[gid]['temp'].append(t_val)
+
+                    # 2. Power
+                    p_val = 0
+                    for k, v in c.items():
+                        if "power" in k.lower() and "average" in k.lower():
+                            p_val = float(v)
+                            break
+                        if "power" in k.lower() and float(v) > p_val:
+                            p_val = float(v)
+                    if p_val > 0: self.history[gid]['pwr'].append(p_val)
+
+                    # 3. Clock (SCLK or MCLK)
+                    clk_val = 0
+                    for k, v in c.items():
+                        if "sclk" in k.lower() and "(" in str(v):
+                            # Format: "(1200Mhz)"
+                            clean = str(v).replace("(", "").replace(")", "").replace("Mhz", "")
+                            clk_val = float(clean)
+                            break
+                    if clk_val > 0: self.history[gid]['clk'].append(clk_val)
+
+        except Exception as e:
+            pass
 
     def _poll_nvidia(self, gpu_ids):
         try:
@@ -357,6 +392,7 @@ class HardwareMonitor:
     def _aggregate(self):
         stats = {}
         for gid, data in self.history.items():
+            # If no data collected (e.g. sensor failure), avoid crash with default 0
             stats[gid] = {
                 "avg_temp": round(np.mean(data['temp']), 1) if data['temp'] else 0,
                 "max_temp": round(np.max(data['temp']), 1) if data['temp'] else 0,
@@ -431,10 +467,90 @@ database/*
 build/*
 
 
+__pycache___
+
+
 ==================================================
 FILE: ./README.md
 ==================================================
-# pantheon
+# Pantheon: Universal GPU Stress & Diagnostics Suite
+
+Pantheon is a cross-platform (CUDA/ROCm) stress testing tool designed to isolate and hammer specific GPU subsystems. Unlike generic benchmarks (Furmark, 3DMark), Pantheon allows you to test specific silicon limits.
+
+## Requirements
+- **Python:** `pip3 install psutil pandas openpyxl numpy`
+- **Compiler:** `nvcc` (NVIDIA) or `hipcc` (AMD)
+
+## Quick Start
+```bash
+# Run the full suite (30 seconds per test)
+python3 pantheon.py --test all --duration 30
+
+# Run a specific "Power Virus" test
+python3 pantheon.py --test tensor_virus --duration 60
+
+Test RegistryTest NameTarget SubsystemFailure Symptomshbm_readVRAM Controller (Read)Screen artifacts, system freeze.hbm_write_aggInfinity Fabric / L2 CacheDriver timeout, massive stutter.tensor_virusTensor/Matrix Cores (FP16)Thermal Throttling, VRM shutdown (Black screen).atomic_virusROPs & L2 AtomicsApplication crashes, erratic performance.incineratorVector ALUs + SRAMGeneral instability, core clock drops.Interpretation of ResultsThroughput: For Read tests, this should match your card's theoretical max bandwidth.Power: tensor_virus should generate the highest power draw (W).Temps: incinerator or tensor_virus should generate the highest Hotspot temps.
+### **Bonus: The "Burn-In" Script**
+If you want to use this to test the stability of an overclock or a used GPU, create this shell script to run a 1-hour cyclic burn-in.
+
+**Create File: `burn_in.sh`**
+
+```bash
+#!/bin/bash
+echo "Starting 1-Hour Stability Burn-In..."
+
+# 1. Heat up the loop (Matrix Cores) - 10 Minutes
+echo "[Phase 1] Thermal Shock (Tensor Virus)"
+python3 pantheon.py --test tensor_virus --duration 600
+
+# 2. Thrash the Memory Controller - 10 Minutes
+echo "[Phase 2] Memory Controller Saturation"
+python3 pantheon.py --test hbm_read_agg --duration 600
+
+# 3. Thrash the Cache/Fabric - 10 Minutes
+echo "[Phase 3] Fabric/L2 Stress"
+python3 pantheon.py --test atomic_virus --duration 600
+
+# 4. Mixed Loop (All tests cycling) - 30 Minutes
+echo "[Phase 4] Mixed Cycle"
+for i in {1..5}
+do
+   python3 pantheon.py --test all --duration 60
+done
+
+echo "Burn-In Complete. Check database/ folder for logs."
+You can make it executable with chmod +x burn_in.sh
+
+
+==================================================
+FILE: ./burn_in.sh
+==================================================
+#!/bin/bash
+# Save this as burn_in.sh and run: chmod +x burn_in.sh
+
+echo "Starting Pantheon 1-Hour Burn-In..."
+
+# Phase 1: Thermal Shock (10 Mins)
+# Rapidly heats up the die to test cooling mount pressure
+echo "[Phase 1] Thermal Shock (Tensor Virus)"
+python3 pantheon.py --test tensor_virus --duration 600
+
+# Phase 2: VRAM Saturation (10 Mins)
+# Fills memory to 99% to test for bad memory chips
+echo "[Phase 2] Memory Controller Saturation"
+python3 pantheon.py --test hbm_read_agg --duration 600
+
+# Phase 3: Mixed Load (40 Mins)
+# Cycles through all tests to find transient instability
+echo "[Phase 3] Mixed Cycle Loop"
+for i in {1..8}
+do
+   echo "Loop $i / 8"
+   python3 pantheon.py --test all --duration 300
+done
+
+echo "Burn-In Complete. Check database/ folder for logs."
+
 
 ==================================================
 FILE: ./pantheon.py
@@ -694,11 +810,17 @@ def main():
             throughput = "N/A"
             
             if out:
+                # print(out) # DEBUG: Uncomment if you still see N/A
                 for line in out.split('\n'):
                     if "Throughput:" in line:
                         try:
-                            throughput = float(line.split(":")[1].replace("GB/s", "").strip())
-                        except: pass
+                            # Split by ":", take the right side
+                            raw_val = line.split(":")[1].strip()
+                            # Extract just the number (remove GB/s, MAPS, etc)
+                            number_part = raw_val.split(' ')[0] 
+                            throughput = float(number_part)
+                        except: 
+                            pass
             
             stats = hw_stats.get(gpu, {})
             row = {
@@ -752,6 +874,83 @@ if __name__ == "__main__":
 
 
 ==================================================
+FILE: ./requirements.txt
+==================================================
+psutil
+pandas
+openpyxl
+numpy
+
+
+==================================================
+FILE: ./kernels/common/mock_gpu.h
+==================================================
+#ifndef MOCK_GPU_H
+#define MOCK_GPU_H
+
+#include <iostream>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+
+// --- MOCK TYPES ---
+typedef int hipError_t;
+#define hipSuccess 0
+struct hipDeviceProp_t { int multiProcessorCount; };
+
+// --- MOCK VECTOR TYPES ---
+struct float4_ { float x, y, z, w; };
+struct uint4_ { unsigned int x, y, z, w; };
+struct float2_ { float x, y; };
+typedef float4_ float4;
+typedef uint4_ uint4;
+typedef float2_ float2;
+
+// --- MOCK QUALIFIERS ---
+// Define these as empty strings so g++ ignores them
+#define __global__
+#define __device__
+#define __host__
+#define __forceinline__ inline
+#define __launch_bounds__(x)
+
+// --- MOCK THREADING ---
+// We simulate 1 thread per block for logic testing
+struct uint3 { unsigned int x, y, z; };
+static uint3 threadIdx = {0,0,0};
+static uint3 blockIdx = {0,0,0};
+static uint3 blockDim = {1,1,1};
+static uint3 gridDim = {1,1,1};
+
+inline void __syncthreads() {} // No-op for single thread
+
+// --- MOCK API ---
+inline hipError_t hipSetDevice(int dev) { return hipSuccess; }
+inline hipError_t hipGetDeviceProperties(hipDeviceProp_t* p, int d) { p->multiProcessorCount = 1; return hipSuccess; }
+inline hipError_t hipDeviceSynchronize() { return hipSuccess; }
+inline hipError_t hipMemGetInfo(size_t* f, size_t* t) { *f=1e9; *t=2e9; return hipSuccess; }
+inline hipError_t hipMalloc(void** p, size_t s) { *p = malloc(s); return hipSuccess; }
+inline hipError_t hipFree(void* p) { free(p); return hipSuccess; }
+inline hipError_t hipMemset(void* p, int v, size_t s) { memset(p, v, s); return hipSuccess; }
+
+// --- MOCK INTRINSICS ---
+// Half-precision shim (treat as float)
+typedef float __half2;
+inline float __float2half2_rn(float f) { return f; }
+inline float __hfma2(float a, float b, float c) { return a*b+c; }
+inline float __hneg2(float a) { return -a; }
+inline float2 __half22float2(float a) { return {a, a}; }
+
+// Constructors
+inline uint4 make_uint4(unsigned int x, unsigned int y, unsigned int z, unsigned int w) { return {x,y,z,w}; }
+
+// Atomic Shim (Single threaded = standard add)
+inline void atomicAdd(unsigned int* address, int val) { *address += val; }
+
+#endif
+
+
+==================================================
 FILE: ./kernels/common/hip_shim.h
 ==================================================
 #ifndef HIP_SHIM_H
@@ -799,9 +998,64 @@ FILE: ./kernels/common/common.h
 #ifndef PANTHEON_COMMON_H
 #define PANTHEON_COMMON_H
 
-#include "../common/hip_shim.h" 
 #include <iostream>
 #include <cstdlib>
+
+// ==========================================
+// PATH 1: CPU MOCK SIMULATION (CI/CD)
+// ==========================================
+#ifdef PANTHEON_MOCK
+    #include "mock_gpu.h"
+    
+    // In Mock mode, "Launch" just calls the function directly on the CPU.
+    // We ignore grid/block dimensions since we are single-threaded here.
+    #define LAUNCH_KERNEL(kernel_name, grid, block, ...) kernel_name(__VA_ARGS__)
+
+// ==========================================
+// PATH 2: REAL GPU (CUDA / ROCm)
+// ==========================================
+#else
+    // --- CROSS-PLATFORM SHIM (HIP -> CUDA) ---
+    #ifdef __CUDACC__
+        // NVIDIA / CUDA MODE
+        #include <cuda_runtime.h>
+        #include <device_launch_parameters.h>
+
+        #define hipError_t cudaError_t
+        #define hipSuccess cudaSuccess
+        #define hipDeviceProp_t cudaDeviceProp
+        #define hipGetErrorString cudaGetErrorString
+        #define hipStream_t cudaStream_t
+        #define hipSetDevice cudaSetDevice
+        #define hipGetDeviceProperties cudaGetDeviceProperties
+        #define hipMalloc cudaMalloc
+        #define hipFree cudaFree
+        #define hipMemcpy cudaMemcpy
+        #define hipMemcpyDeviceToHost cudaMemcpyDeviceToHost
+        #define hipMemGetInfo cudaMemGetInfo
+        #define hipDeviceSynchronize cudaDeviceSynchronize
+        #define hipStreamCreate cudaStreamCreate
+        #define hipStreamDestroy cudaStreamDestroy
+        #define hipStreamSynchronize cudaStreamSynchronize
+        #define hipMemset cudaMemset 
+
+    #else
+        // AMD / ROCm MODE
+        #include <hip/hip_runtime.h>
+    #endif
+
+    // Real Kernel Launch Syntax
+    #define LAUNCH_KERNEL(kernel_name, grid, block, ...) kernel_name<<<grid, block>>>(__VA_ARGS__)
+
+    // 128-bit Vector Types (GCC/Clang Vector Extensions for GPU)
+    typedef float float4_ __attribute__((vector_size(16)));
+    typedef unsigned int uint4_ __attribute__((vector_size(16)));
+#endif
+
+
+// ==========================================
+// SHARED UTILITIES
+// ==========================================
 
 #define BLOCK_SIZE 256
 
@@ -816,12 +1070,20 @@ FILE: ./kernels/common/common.h
     } \
 }
 
-// --- Non-Temporal Store (Bypass Cache & Write to HBM) ---
-__device__ __forceinline__ void store_nt(void* addr, uint4 val) {
-#ifdef __HIP_PLATFORM_AMD__
+// --- NON-TEMPORAL STORE (Bypass Cache -> Write HBM) ---
+// 1. CPU Mock: Standard Store
+// 2. AMD: Builtin or Cast
+// 3. CUDA: PTX ASM
+__device__ __host__ __forceinline__ void store_nt(void* addr, uint4 val) {
+#ifdef PANTHEON_MOCK
+    // CPU Mock: Just write to memory
+    *(uint4*)addr = val;
+#elif defined(__HIP_PLATFORM_AMD__)
+    // AMD: Use builtin for NT store
     typedef unsigned int __attribute__((vector_size(16))) vec_uint4;
     __builtin_nontemporal_store(*(vec_uint4*)&val, (vec_uint4*)addr);
 #elif defined(__CUDACC__)
+    // NVIDIA: PTX ASM
     asm volatile("st.global.cs.v4.u32 [%0], {%1, %2, %3, %4};" 
                  :: "l"(addr), "r"(val.x), "r"(val.y), "r"(val.z), "r"(val.w));
 #else
@@ -829,14 +1091,26 @@ __device__ __forceinline__ void store_nt(void* addr, uint4 val) {
 #endif
 }
 
-// --- Non-Temporal Load (Bypass Cache & Read from HBM) ---
-__device__ __forceinline__ uint4 load_nt(void* addr) {
+// --- NON-TEMPORAL LOAD (CRASH-PROOF VERSION) ---
+// 1. CPU Mock: Standard Load
+// 2. AMD: Decomposed Loads (RDNA Fix)
+// 3. CUDA: PTX ASM
+__device__ __host__ __forceinline__ uint4 load_nt(void* addr) {
     uint4 ret;
-#ifdef __HIP_PLATFORM_AMD__
-    typedef unsigned int __attribute__((vector_size(16))) vec_uint4;
-    vec_uint4 v = __builtin_nontemporal_load((vec_uint4*)addr);
-    ret = *(uint4*)&v;
+#ifdef PANTHEON_MOCK
+    // CPU Mock: Just read memory
+    ret = *(uint4*)addr;
+#elif defined(__HIP_PLATFORM_AMD__)
+    // RDNA CRASH FIX: Decompose into 4x 32-bit loads.
+    // Attempting a single 128-bit vector load (*(uint4*)) segfaults on RDNA
+    // if the buffer isn't perfectly 128-bit aligned.
+    unsigned int* p = (unsigned int*)addr;
+    ret.x = p[0];
+    ret.y = p[1];
+    ret.z = p[2];
+    ret.w = p[3];
 #elif defined(__CUDACC__)
+    // NVIDIA: PTX Streaming Load
     asm volatile("ld.global.cs.v4.u32 {%0, %1, %2, %3}, [%4];" 
                  : "=r"(ret.x), "=r"(ret.y), "=r"(ret.z), "=r"(ret.w) : "l"(addr));
 #else
@@ -890,7 +1164,7 @@ int main(int argc, char* argv[]) {
     size_t alloc_size = (free * mem_pct) / 100;
     size_t num_elements = alloc_size / 16; 
 
-    void* d_data; CHECK(hipMalloc(&d_data, alloc_size));
+    uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
     CHECK(hipMemset(d_data, 0, alloc_size)); 
 
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
@@ -902,7 +1176,7 @@ int main(int argc, char* argv[]) {
     size_t ops_performed = 0;
 
     while (true) {
-        atomic_virus_kernel<<<num_blocks, BLOCK_SIZE>>>((uint4*)d_data, num_elements);
+	LAUNCH_KERNEL(atomic_virus_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
         
         // 4 ints per uint4 element
@@ -994,7 +1268,7 @@ int main(int argc, char* argv[]) {
     // Main Stress Loop
     while(true) {
         // Run a heavy batch of instructions
-        voltage_droop_kernel<<<num_blocks, BLOCK_SIZE>>>(20000, d_sink);
+        LAUNCH_KERNEL(voltage_droop_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
         CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();
@@ -1079,8 +1353,8 @@ int main(int argc, char* argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     while(true) {
-        incinerator_kernel<<<num_blocks, BLOCK_SIZE>>>(20000, d_sink);
-        CHECK(hipDeviceSynchronize());
+        LAUNCH_KERNEL(incinerator_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
+	CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
@@ -1171,9 +1445,9 @@ int main(int argc, char* argv[]) {
     // 1. Initialize Random Table
     std::cout << "[PANTHEON] GPU " << gpu_id << ": Init Random Walk on " 
               << alloc_size / (1024*1024) << " MB (" << num_elements << " nodes)..." << std::endl;
-              
-    init_lcg_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements);
-    CHECK(hipDeviceSynchronize());
+    
+    LAUNCH_KERNEL(init_lcg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
+    CHECK(hipDeviceSynchronize());    
 
     // 2. Run Stress
     std::cout << "[PANTHEON] GPU " << gpu_id << ": Running CACHE LATENCY STRESS..." << std::endl;
@@ -1183,8 +1457,8 @@ int main(int argc, char* argv[]) {
     int inner_loops = 10000; 
 
     while (true) {
-        latency_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements, inner_loops, d_sink);
-        CHECK(hipDeviceSynchronize());
+        LAUNCH_KERNEL(latency_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements, inner_loops, d_sink);
+	CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
@@ -1295,7 +1569,7 @@ int main(int argc, char* argv[]) {
     size_t bytes_transferred = 0;
 
     while (true) {
-        hbm_write_agg_kernel<<<num_blocks, BLOCK_SIZE>>>((uint4*)d_data, num_elements);
+	LAUNCH_KERNEL(hbm_write_agg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
         
         bytes_transferred += alloc_size;
@@ -1378,7 +1652,7 @@ int main(int argc, char* argv[]) {
     size_t bytes_transferred = 0;
 
     while (true) {
-        hbm_write_kernel<<<num_blocks, BLOCK_SIZE>>>((uint4*)d_data, num_elements);
+	LAUNCH_KERNEL(hbm_write_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
         
         bytes_transferred += alloc_size; // Write only
@@ -1402,45 +1676,51 @@ FILE: ./kernels/hbm_read/hbm_read_agg.cpp
 #include <vector>
 #include <chrono>
 
-// --- AGGRESSIVE READ KERNEL ---
-// Uses 8-way Instruction Level Parallelism (ILP) to hide latency.
-// This ensures the Memory Controller Read Queue is always 100% full.
+// --- SAFE READ KERNEL ---
+// Uses volatile pointer access to prevent compiler optimization
+// without using unstable intrinsics.
 __global__ __launch_bounds__(256)
 void hbm_read_agg_kernel(uint4* data, size_t n, uint4* sink) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     size_t stride = blockDim.x * gridDim.x;
 
-    // 8 Independent Accumulators
-    // Breaking the dependency chain allows the GPU to issue 8 loads 
-    // before waiting for the first one to return.
     unsigned int a0 = 0, a1 = 0, a2 = 0, a3 = 0;
-    unsigned int a4 = 0, a5 = 0, a6 = 0, a7 = 0;
+    
+    // Cast to volatile uint for safe, unoptimized reads
+    volatile unsigned int* ptr = (volatile unsigned int*)data;
+    size_t num_ints = n * 4; // uint4 = 4 uints
+    size_t step = stride * 4; // Stride in uints
 
-    // 32x Unroll (4 blocks of 8 loads)
-    for (size_t i = idx; i + stride * 31 < n; i += stride * 32) {
+    // Manual 16x Unroll
+    for (size_t i = idx * 4; i + step * 15 < num_ints; i += step * 16) {
+        a0 += ptr[i];
+        a1 += ptr[i + step];
+        a2 += ptr[i + step * 2];
+        a3 += ptr[i + step * 3];
         
-        uint4 v0 = load_nt(&data[i]);
-        uint4 v1 = load_nt(&data[i+stride]);
-        uint4 v2 = load_nt(&data[i+stride*2]);
-        uint4 v3 = load_nt(&data[i+stride*3]);
-        uint4 v4 = load_nt(&data[i+stride*4]);
-        uint4 v5 = load_nt(&data[i+stride*5]);
-        uint4 v6 = load_nt(&data[i+stride*6]);
-        uint4 v7 = load_nt(&data[i+stride*7]);
-        
-        // Sum into independent registers
-        a0 += v0.x; a1 += v1.x; a2 += v2.x; a3 += v3.x;
-        a4 += v4.x; a5 += v5.x; a6 += v6.x; a7 += v7.x;
+        a0 += ptr[i + step * 4];
+        a1 += ptr[i + step * 5];
+        a2 += ptr[i + step * 6];
+        a3 += ptr[i + step * 7];
 
-        // ... Repeat block 3 more times for 32x unroll (Shortened here for readability) ...
+        a0 += ptr[i + step * 8];
+        a1 += ptr[i + step * 9];
+        a2 += ptr[i + step * 10];
+        a3 += ptr[i + step * 11];
+
+        a0 += ptr[i + step * 12];
+        a1 += ptr[i + step * 13];
+        a2 += ptr[i + step * 14];
+        a3 += ptr[i + step * 15];
     }
 
-    // Collapse results
-    unsigned int final_sum = a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7;
+    // Write result to sink (One slot per thread)
+    // idx is guaranteed to be < GridDim * BlockDim, so we map 1:1 to sink
+    unsigned int final_sum = a0 + a1 + a2 + a3;
     if (final_sum == 0xDEADBEEF) sink[idx] = make_uint4(final_sum, 0, 0, 0);
 }
 
-// Helper to init data (same as before)
+// Helper to init data
 __global__ void init_data(uint4* data, size_t n) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     size_t stride = blockDim.x * gridDim.x;
@@ -1456,30 +1736,42 @@ int main(int argc, char* argv[]) {
 
     CHECK(hipSetDevice(gpu_id));
 
+    // 1. Calculate Available Memory
     size_t free, total; CHECK(hipMemGetInfo(&free, &total));
     if (mem_pct > 99) mem_pct = 99;
+    
+    // 2. Alloc Source Data (The massive buffer)
+    // We leave 50MB padding to be safe against driver overhead
     size_t alloc_size = (free * mem_pct) / 100;
+    if (free - alloc_size < 50 * 1024 * 1024) {
+        alloc_size = free - 50 * 1024 * 1024;
+    }
     size_t num_elements = alloc_size / 16; 
 
-    uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
-    uint4* d_sink; CHECK(hipMalloc(&d_sink, alloc_size));
-
+    // 3. Alloc Sink (Small buffer, just for results)
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
     int num_blocks = prop.multiProcessorCount * 20;
+    size_t sink_size = num_blocks * BLOCK_SIZE * sizeof(uint4);
 
-    init_data<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements);
+    uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
+    uint4* d_sink; CHECK(hipMalloc(&d_sink, sink_size)); // <-- FIX: Use small size
+
+    // Init Data
+    LAUNCH_KERNEL(init_data, num_blocks, BLOCK_SIZE, d_data, num_elements);
     CHECK(hipDeviceSynchronize());
 
-    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM READ AGG (8-way ILP) | " 
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM READ AGG | " 
               << mem_pct << "% VRAM | " << duration << "s" << std::endl;
 
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t bytes_transferred = 0;
 
     while (true) {
-        hbm_read_agg_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements, d_sink);
+	LAUNCH_KERNEL(hbm_read_agg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
+        
         bytes_transferred += alloc_size;
+
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
     }
@@ -1499,34 +1791,35 @@ FILE: ./kernels/hbm_read/hbm_read.cpp
 #include <vector>
 #include <chrono>
 
-// --- READ KERNEL ---
-// Uses Non-Temporal Loads. Sums data to prevent optimization.
+// --- STANDARD READ KERNEL (RDNA FIX) ---
+// Uses volatile reads decomposed into 32-bit chunks to prevent crashes on AMD.
 __global__ void hbm_read_kernel(uint4* data, size_t n, uint4* sink) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     size_t stride = blockDim.x * gridDim.x;
 
-    // Accumulators (Break dependency chains)
     unsigned int acc = 0;
+    
+    // Cast to volatile uint
+    volatile unsigned int* ptr = (volatile unsigned int*)data;
+    size_t num_ints = n * 4; 
+    size_t step = stride * 4;
 
-    for (size_t i = idx; i + stride * 3 < n; i += stride * 4) {
-        uint4 v0 = load_nt(&data[i]);
-        uint4 v1 = load_nt(&data[i+stride]);
-        uint4 v2 = load_nt(&data[i+stride*2]);
-        uint4 v3 = load_nt(&data[i+stride*3]);
-
-        // Minimal logic to keep data alive
-        acc += v0.x + v1.x + v2.x + v3.x;
+    // 4x Unroll (Standard)
+    for (size_t i = idx * 4; i + step * 3 < num_ints; i += step * 4) {
+        acc += ptr[i];
+        acc += ptr[i + step];
+        acc += ptr[i + step * 2];
+        acc += ptr[i + step * 3];
     }
 
-    // Write to sink (one per thread)
     if (acc == 0xDEADBEEF) sink[idx] = make_uint4(acc, 0, 0, 0);
 }
 
-// Helper to init memory so reads aren't checking zeros
+// Helper to init data
 __global__ void init_data(uint4* data, size_t n) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     size_t stride = blockDim.x * gridDim.x;
-    uint4 val = make_uint4(1, 2, 3, 4);
+    uint4 val = make_uint4(1, 1, 1, 1);
     for (size_t i = idx; i < n; i += stride) data[i] = val;
 }
 
@@ -1538,34 +1831,35 @@ int main(int argc, char* argv[]) {
 
     CHECK(hipSetDevice(gpu_id));
 
-    size_t free, total;
-    CHECK(hipMemGetInfo(&free, &total));
+    size_t free, total; CHECK(hipMemGetInfo(&free, &total));
     if (mem_pct > 99) mem_pct = 99;
+    
+    // Safe Allocation Logic
     size_t alloc_size = (free * mem_pct) / 100;
+    if (free - alloc_size < 50 * 1024 * 1024) alloc_size = free - 50 * 1024 * 1024;
     size_t num_elements = alloc_size / 16; 
 
-    uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
-    uint4* d_sink; CHECK(hipMalloc(&d_sink, alloc_size)); // Sink matches size to avoid bounds checks
-
+    // Small Sink Allocation
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
     int num_blocks = prop.multiProcessorCount * 20;
+    size_t sink_size = num_blocks * BLOCK_SIZE * sizeof(uint4);
 
-    // Init Data
-    init_data<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements);
+    uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
+    uint4* d_sink; CHECK(hipMalloc(&d_sink, sink_size));
+
+    LAUNCH_KERNEL(init_data, num_blocks, BLOCK_SIZE, d_data, num_elements);
     CHECK(hipDeviceSynchronize());
 
-    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM READ (NT Load) | " 
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM READ (Standard) | " 
               << mem_pct << "% VRAM | " << duration << "s" << std::endl;
 
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t bytes_transferred = 0;
 
     while (true) {
-        hbm_read_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements, d_sink);
+	LAUNCH_KERNEL(hbm_read_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
-        
-        bytes_transferred += alloc_size; // Read only
-
+        bytes_transferred += alloc_size;
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
     }
@@ -1573,8 +1867,7 @@ int main(int argc, char* argv[]) {
     double seconds = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start_time).count();
     std::cout << "Throughput: " << (bytes_transferred / 1e9) / seconds << " GB/s" << std::endl;
 
-    CHECK(hipFree(d_data));
-    CHECK(hipFree(d_sink));
+    CHECK(hipFree(d_data)); CHECK(hipFree(d_sink));
     return 0;
 }
 
@@ -1583,38 +1876,43 @@ int main(int argc, char* argv[]) {
 FILE: ./kernels/tensor_virus/tensor_virus.cpp
 ==================================================
 #include "../common/common.h"
-#include <hip/hip_fp16.h> // Standard header for half-precision
 #include <chrono>
+
+// --- HEADER FIX FOR CUDA/HIP ---
+#ifdef __CUDACC__
+    #include <cuda_fp16.h>
+#else
+    #include <hip/hip_fp16.h>
+#endif
 
 // --- TENSOR VIRUS (FP16 HAMMER) ---
 // Uses Half-Precision (FP16) to saturate Tensor/Matrix cores.
-// FP16 operations on RTX 3000 run at double the rate of FP32, 
-// generating massive register heat and power draw (350W+).
 __global__ void tensor_virus_kernel(int iters, float* sink) {
     size_t tid = threadIdx.x;
     
     // Initialize Half-Precision Registers
-    // We use __half2 (vector of two fp16s) to maximize throughput per instruction
+    // __half2 is a vector of two 16-bit floats (Packed FP16)
+#ifdef __CUDACC__
     __half2 a = __float2half2_rn(1.0f);
     __half2 b = __float2half2_rn(0.5f);
     __half2 c = __float2half2_rn(-1.0f);
-    
-    for(int i=0; i<iters; ++i) {
-        // HFMA2 (Half-Precision Fused Multiply-Add 2-way)
-        // Performs 4 floating point ops per instruction cycle (2 muls + 2 adds)
-        #ifdef __HIP_PLATFORM_AMD__
-            // AMD Intrinsic
-            a = __v_pk_fma_f16(a, b, c);
-            b = __v_pk_fma_f16(b, c, a);
-            c = __v_pk_fma_f16(c, a, b);
-        #else
-            // CUDA Intrinsic (Native Tensor Core op)
-            a = __hfma2(a, b, c);
-            b = __hfma2(b, c, a);
-            c = __hfma2(c, a, b);
-        #endif
+#else
+    // AMD/ROCm often defines __half2 constructors differently in older versions,
+    // but newer HIP supports the standard CUDA-style naming:
+    __half2 a = __float2half2_rn(1.0f);
+    __half2 b = __float2half2_rn(0.5f);
+    __half2 c = __float2half2_rn(-1.0f);
+#endif
 
-        // Polarity flip every 16 ops to prevent voltage smoothing
+    for(int i=0; i<iters; ++i) {
+        // Universal FMA (Fused Multiply Add)
+        // This works on both AMD (ROCm) and NVIDIA (CUDA)
+        // It maps to v_pk_fma_f16 on AMD and HMMA/HFMA on NVIDIA.
+        a = __hfma2(a, b, c);
+        b = __hfma2(b, c, a);
+        c = __hfma2(c, a, b);
+
+        // Polarity flip to prevent value convergence
         if ((i & 0xF) == 0) {
             a = __hneg2(a);
         }
@@ -1633,16 +1931,18 @@ int main(int argc, char* argv[]) {
     CHECK(hipSetDevice(gpu_id));
     float* d_sink; CHECK(hipMalloc(&d_sink, 1024 * sizeof(float)));
 
-    // Max Occupancy: Tensor tests need MASSIVE parallelism to fill the huge pipes.
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
+    
+    // Max Occupancy: Tensor tests need MASSIVE parallelism to fill the huge pipes.
+    // For RDNA/gfx1010, we want to saturate the vector ALUs.
     int num_blocks = prop.multiProcessorCount * 32; 
 
-    std::cout << "[PANTHEON] GPU " << gpu_id << ": Running TENSOR VIRUS (FP16/Matrix Core Stress)..." << std::endl;
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": Running TENSOR VIRUS (FP16 Stress)..." << std::endl;
 
     auto start_time = std::chrono::high_resolution_clock::now();
     
     while(true) {
-        tensor_virus_kernel<<<num_blocks, BLOCK_SIZE>>>(20000, d_sink);
+	LAUNCH_KERNEL(tensor_virus_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
         CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();

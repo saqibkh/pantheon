@@ -68,8 +68,8 @@ int main(int argc, char* argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     while(true) {
-        incinerator_kernel<<<num_blocks, BLOCK_SIZE>>>(20000, d_sink);
-        CHECK(hipDeviceSynchronize());
+        LAUNCH_KERNEL(incinerator_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
+	CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;

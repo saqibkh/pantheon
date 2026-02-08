@@ -58,7 +58,8 @@ int main(int argc, char* argv[]) {
     uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
     uint4* d_sink; CHECK(hipMalloc(&d_sink, sink_size));
 
-    init_data<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements);
+    // CI FIX: Use LAUNCH_KERNEL macro
+    LAUNCH_KERNEL(init_data, num_blocks, BLOCK_SIZE, d_data, num_elements);
     CHECK(hipDeviceSynchronize());
 
     std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM READ (Standard) | " 
@@ -68,8 +69,10 @@ int main(int argc, char* argv[]) {
     size_t bytes_transferred = 0;
 
     while (true) {
-        hbm_read_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements, d_sink);
+        // CI FIX: Use LAUNCH_KERNEL and include d_sink
+        LAUNCH_KERNEL(hbm_read_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements, d_sink);
         CHECK(hipDeviceSynchronize());
+        
         bytes_transferred += alloc_size;
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;

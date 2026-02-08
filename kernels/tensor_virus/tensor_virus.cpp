@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     while(true) {
-        tensor_virus_kernel<<<num_blocks, BLOCK_SIZE>>>(20000, d_sink);
+	LAUNCH_KERNEL(tensor_virus_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
         CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();

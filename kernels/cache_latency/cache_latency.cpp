@@ -75,9 +75,9 @@ int main(int argc, char* argv[]) {
     // 1. Initialize Random Table
     std::cout << "[PANTHEON] GPU " << gpu_id << ": Init Random Walk on " 
               << alloc_size / (1024*1024) << " MB (" << num_elements << " nodes)..." << std::endl;
-              
-    init_lcg_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements);
-    CHECK(hipDeviceSynchronize());
+    
+    LAUNCH_KERNEL(init_lcg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
+    CHECK(hipDeviceSynchronize());    
 
     // 2. Run Stress
     std::cout << "[PANTHEON] GPU " << gpu_id << ": Running CACHE LATENCY STRESS..." << std::endl;
@@ -87,8 +87,8 @@ int main(int argc, char* argv[]) {
     int inner_loops = 10000; 
 
     while (true) {
-        latency_kernel<<<num_blocks, BLOCK_SIZE>>>(d_data, num_elements, inner_loops, d_sink);
-        CHECK(hipDeviceSynchronize());
+        LAUNCH_KERNEL(latency_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements, inner_loops, d_sink);
+	CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;

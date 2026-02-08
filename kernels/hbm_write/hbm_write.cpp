@@ -45,26 +45,27 @@ int main(int argc, char* argv[]) {
     CHECK(hipMemGetInfo(&free, &total));
     if (mem_pct > 99) mem_pct = 99;
     size_t alloc_size = (free * mem_pct) / 100;
-    size_t num_elements = alloc_size / 16; 
+    size_t num_elements = alloc_size / 16;
 
-    void* d_data;
+    // --- FIX: Change void* to uint4* ---
+    uint4* d_data;
     CHECK(hipMalloc(&d_data, alloc_size));
 
     // Oversubscribe CUs
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
     int num_blocks = prop.multiProcessorCount * 20;
 
-    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM WRITE (NT Store) | " 
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM WRITE (NT Store) | "
               << mem_pct << "% VRAM | " << duration << "s" << std::endl;
-
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t bytes_transferred = 0;
 
     while (true) {
-        hbm_write_kernel<<<num_blocks, BLOCK_SIZE>>>((uint4*)d_data, num_elements);
+        // Use LAUNCH_KERNEL for CI compatibility
+        LAUNCH_KERNEL(hbm_write_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
-        
-        bytes_transferred += alloc_size; // Write only
+
+        bytes_transferred += alloc_size;
 
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;

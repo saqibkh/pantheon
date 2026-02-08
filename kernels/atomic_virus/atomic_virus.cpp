@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     size_t alloc_size = (free * mem_pct) / 100;
     size_t num_elements = alloc_size / 16; 
 
-    void* d_data; CHECK(hipMalloc(&d_data, alloc_size));
+    uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
     CHECK(hipMemset(d_data, 0, alloc_size)); 
 
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
     size_t ops_performed = 0;
 
     while (true) {
-        atomic_virus_kernel<<<num_blocks, BLOCK_SIZE>>>((uint4*)d_data, num_elements);
+	LAUNCH_KERNEL(atomic_virus_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
         
         // 4 ints per uint4 element
