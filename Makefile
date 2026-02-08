@@ -12,7 +12,14 @@ ifeq ($(PLATFORM), MOCK)
     CXXFLAGS += -DPANTHEON_MOCK -Wno-unknown-pragmas -pthread
 else ifeq ($(PLATFORM), CUDA)
     COMPILER := nvcc
-    DETECTED_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d '.' || echo "70")
+    # 1. Try to detect GPU architecture
+    DETECTED_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d '.')
+
+    # 2. CI/No-GPU Fallback: If detection returned empty string, default to sm_70 (Volta)
+    ifeq ($(DETECTED_ARCH),)
+        DETECTED_ARCH := 70
+    endif
+
     CXXFLAGS += -x cu --gpu-architecture=sm_$(DETECTED_ARCH) -Wno-deprecated-gpu-targets
 else
     COMPILER := hipcc
