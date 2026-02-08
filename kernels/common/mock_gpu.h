@@ -42,7 +42,17 @@ inline hipError_t hipSetDevice(int dev) { return hipSuccess; }
 inline hipError_t hipGetDeviceProperties(hipDeviceProp_t* p, int d) { p->multiProcessorCount = 1; return hipSuccess; }
 inline hipError_t hipDeviceSynchronize() { return hipSuccess; }
 inline hipError_t hipMemGetInfo(size_t* f, size_t* t) { *f=1e9; *t=2e9; return hipSuccess; }
-inline hipError_t hipMalloc(void** p, size_t s) { *p = malloc(s); return hipSuccess; }
+
+// FIX 1: Add missing Error String function used by CHECK macro
+inline const char* hipGetErrorString(hipError_t error) { return "Mock Success"; }
+
+// FIX 2: Template hipMalloc to accept uint4** directly (fixes 'invalid conversion' error)
+template <typename T>
+inline hipError_t hipMalloc(T** p, size_t s) {
+    *p = (T*)malloc(s);
+    return hipSuccess;
+}
+
 inline hipError_t hipFree(void* p) { free(p); return hipSuccess; }
 inline hipError_t hipMemset(void* p, int v, size_t s) { memset(p, v, s); return hipSuccess; }
 
