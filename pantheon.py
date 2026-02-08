@@ -159,10 +159,19 @@ def get_system_snapshot(platform_name):
 # --- Core Logic ---
 
 def detect_platform():
-    if subprocess.run("which hipcc", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
-        return "HIP"
-    if subprocess.run("which nvcc", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
-        return "CUDA"
+    # 1. Force Mock Mode via Environment Variable (for CI)
+    if os.environ.get("PANTHEON_MOCK") == "1":
+        return "MOCK"
+    
+    # 2. Try Auto-Detect
+    if shutil.which("hipcc"): return "HIP"
+    if shutil.which("nvcc"): return "CUDA"
+    
+    # 3. Fallback to Mock if nothing else found (Optional, good for local dev without GPU)
+    if shutil.which("g++"):
+        print("[PANTHEON] Warning: No GPU compiler found. Defaulting to CPU Mock mode.")
+        return "MOCK"
+        
     return "UNKNOWN"
 
 def build_kernels(platform):
@@ -244,18 +253,39 @@ def main():
         log(f"--- STARTING TEST: {test.upper()} ---")
         
         # 1. Start Monitor
-        monitor.start_collection(target_gpus)
+        monitor.start_collection(target_gpus, run_dir)
 
         # 2. Run Kernels
         procs = run_test(test, target_gpus, args.duration, args.mem)
         
-        # 3. Wait
+        # 3. Watchdog Wait Loop
+        start_wait = time.time()
+        # Allow 10 seconds of grace period over duration for initialization/cleanup
+        timeout = args.duration + 10 
+        
         try:
-            for gpu, p in procs: p.wait()
+            while True:
+                all_done = True
+                for gpu, p in procs:
+                    if p.poll() is None: # Still running
+                        all_done = False
+                
+                if all_done:
+                    break
+                
+                if time.time() - start_wait > timeout:
+                    print(f"\n[WATCHDOG] Test exceeded {timeout}s limit. Terminating...")
+                    for gpu, p in procs:
+                        p.kill()
+                    break
+                
+                time.sleep(1)
         except KeyboardInterrupt:
+            print("\n[PANTHEON] Interrupted by user.")
             for gpu, p in procs: p.kill()
             break
-        
+
+
         # 4. Stop Monitor & Get Stats
         hw_stats = monitor.stop_collection() 
 

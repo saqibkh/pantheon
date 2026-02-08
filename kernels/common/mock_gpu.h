@@ -5,6 +5,11 @@
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
+#include <map>
+
+// --- MOCK STATE ---
+static std::map<void*, size_t> g_mock_allocations;
+static size_t g_mock_total_bytes = 0;
 
 // --- MOCK TYPES ---
 typedef int hipError_t;
@@ -20,7 +25,6 @@ typedef uint4_ uint4;
 typedef float2_ float2;
 
 // --- MOCK QUALIFIERS ---
-// Define these as empty strings so g++ ignores them
 #define __global__
 #define __device__
 #define __host__
@@ -28,46 +32,69 @@ typedef float2_ float2;
 #define __launch_bounds__(x)
 
 // --- MOCK THREADING ---
-// We simulate 1 thread per block for logic testing
 struct uint3 { unsigned int x, y, z; };
 static uint3 threadIdx = {0,0,0};
 static uint3 blockIdx = {0,0,0};
 static uint3 blockDim = {1,1,1};
 static uint3 gridDim = {1,1,1};
-
-inline void __syncthreads() {} // No-op for single thread
+inline void __syncthreads() {}
 
 // --- MOCK API ---
 inline hipError_t hipSetDevice(int dev) { return hipSuccess; }
 inline hipError_t hipGetDeviceProperties(hipDeviceProp_t* p, int d) { p->multiProcessorCount = 1; return hipSuccess; }
 inline hipError_t hipDeviceSynchronize() { return hipSuccess; }
 inline hipError_t hipMemGetInfo(size_t* f, size_t* t) { *f=1e9; *t=2e9; return hipSuccess; }
-
-// FIX 1: Add missing Error String function used by CHECK macro
 inline const char* hipGetErrorString(hipError_t error) { return "Mock Success"; }
 
-// FIX 2: Template hipMalloc to accept uint4** directly (fixes 'invalid conversion' error)
+// TRACKED MALLOC
 template <typename T>
 inline hipError_t hipMalloc(T** p, size_t s) {
     *p = (T*)malloc(s);
+    if (*p) {
+        g_mock_allocations[*p] = s;
+        g_mock_total_bytes += s;
+    }
     return hipSuccess;
 }
 
-inline hipError_t hipFree(void* p) { free(p); return hipSuccess; }
+// TRACKED FREE
+inline hipError_t hipFree(void* p) {
+    if (p) {
+        if (g_mock_allocations.find(p) != g_mock_allocations.end()) {
+            g_mock_total_bytes -= g_mock_allocations[p];
+            g_mock_allocations.erase(p);
+        } else {
+            std::cerr << "[MOCK ERROR] Double free or invalid pointer: " << p << std::endl;
+        }
+        free(p);
+    }
+    return hipSuccess;
+}
+
 inline hipError_t hipMemset(void* p, int v, size_t s) { memset(p, v, s); return hipSuccess; }
 
+// --- LEAK CHECKER ---
+inline void mock_check_leaks() {
+    if (g_mock_total_bytes > 0 || !g_mock_allocations.empty()) {
+        std::cerr << "[MOCK ERROR] Memory Leak Detected! Leaked Bytes: " << g_mock_total_bytes << std::endl;
+        exit(1);
+    }
+}
+
 // --- MOCK INTRINSICS ---
-// Half-precision shim (treat as float)
 typedef float __half2;
 inline float __float2half2_rn(float f) { return f; }
 inline float __hfma2(float a, float b, float c) { return a*b+c; }
 inline float __hneg2(float a) { return -a; }
 inline float2 __half22float2(float a) { return {a, a}; }
-
-// Constructors
 inline uint4 make_uint4(unsigned int x, unsigned int y, unsigned int z, unsigned int w) { return {x,y,z,w}; }
-
-// Atomic Shim (Single threaded = standard add)
 inline void atomicAdd(unsigned int* address, int val) { *address += val; }
+
+// --- AUTO-MAGIC LEAK CHECKER ---
+// This runs automatically when the program exits
+struct MockLeakDetector {
+    ~MockLeakDetector() { mock_check_leaks(); }
+};
+static MockLeakDetector g_leak_detector;
 
 #endif

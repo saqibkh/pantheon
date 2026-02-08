@@ -6,13 +6,16 @@ CXXFLAGS := -O3 -std=c++14 -DNDEBUG -Ikernels/common
 BUILD_DIR := build
 
 # Platform Detection
-ifeq ($(PLATFORM), CUDA)
+ifeq ($(PLATFORM), MOCK)
+    COMPILER := g++
+    # Enable Mock Flag and suppress warnings about GPU-specific pragmas
+    CXXFLAGS += -DPANTHEON_MOCK -Wno-unknown-pragmas -pthread
+else ifeq ($(PLATFORM), CUDA)
     COMPILER := nvcc
-    # NVCC needs explicit architecture and treating .cpp as .cu
-    CXXFLAGS += -x cu --gpu-architecture=sm_70 -Wno-deprecated-gpu-targets
+    DETECTED_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d '.' || echo "70")
+    CXXFLAGS += -x cu --gpu-architecture=sm_$(DETECTED_ARCH) -Wno-deprecated-gpu-targets
 else
     COMPILER := hipcc
-    # HIPCC auto-detects architecture
     CXXFLAGS += -std=c++17 --offload-arch=native
 endif
 

@@ -4,6 +4,8 @@ import json
 import shutil
 import threading
 import numpy as np
+import csv
+import os
 
 class HardwareMonitor:
     def __init__(self, platform):
@@ -28,24 +30,46 @@ class HardwareMonitor:
             except: return 1
         return 1
 
-    def start_collection(self, gpu_ids):
+    def start_collection(self, gpu_ids, output_dir="."):
         self.running = True
         self.history = {gid: {'temp': [], 'pwr': [], 'clk': []} for gid in gpu_ids}
+        
+        # Initialize CSV Logging
+        self.csv_file = open(os.path.join(output_dir, "time_series.csv"), "w", newline="")
+        self.csv_writer = csv.writer(self.csv_file)
+        self.csv_writer.writerow(["Timestamp", "GPU_ID", "Temp_C", "Power_W", "Clock_MHz"])
+        
         self.thread = threading.Thread(target=self._loop, args=(gpu_ids,))
         self.thread.start()
+
+    def _loop(self, gpu_ids):
+        start_t = time.time()
+        while self.running:
+            # Poll Data
+            if self.platform == "HIP" and self.has_rocm_smi:
+                self._poll_amd(gpu_ids)
+            elif self.has_nvidia_smi:
+                self._poll_nvidia(gpu_ids)
+            
+            # Log to CSV (Real-time)
+            elapsed = round(time.time() - start_t, 2)
+            for gid in gpu_ids:
+                if gid in self.history and self.history[gid]['temp']:
+                    # Get latest values
+                    t = self.history[gid]['temp'][-1]
+                    p = self.history[gid]['pwr'][-1] if self.history[gid]['pwr'] else 0
+                    c = self.history[gid]['clk'][-1] if self.history[gid]['clk'] else 0
+                    self.csv_writer.writerow([elapsed, gid, t, p, c])
+            
+            self.csv_file.flush()
+            time.sleep(1)
+        
+        self.csv_file.close()
 
     def stop_collection(self):
         self.running = False
         if self.thread: self.thread.join()
         return self._aggregate()
-
-    def _loop(self, gpu_ids):
-        while self.running:
-            if self.platform == "HIP" and self.has_rocm_smi:
-                self._poll_amd(gpu_ids)
-            elif self.has_nvidia_smi:
-                self._poll_nvidia(gpu_ids)
-            time.sleep(1)
 
     def _poll_amd(self, gpu_ids):
         try:
