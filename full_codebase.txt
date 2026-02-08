@@ -768,6 +768,18 @@ def main():
     else:
         target_gpus = [int(x) for x in args.gpu.split(",")]
 
+    # --- NEW: Display GPU Information ---
+    print("\n" + "="*60)
+    print("PANTHEON SYSTEM DETECTED")
+    print("="*60)
+    gpu_info = get_gpu_static_info()
+    if not gpu_info:
+        print(f"Platform: {platform} (No detailed GPU info available via SMI)")
+    else:
+        for g in gpu_info:
+            print(f"GPU {g['id']}: {g['name']} | {g['memory_total']} VRAM | Driver: {g['driver_version']}")
+    print("="*60 + "\n")
+
     # --- Result Folder Setup ---
     timestamp_str = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = os.path.join(RESULTS_BASE_DIR, timestamp_str)
@@ -809,6 +821,13 @@ def main():
             out, err = p.communicate()
             throughput = "N/A"
             
+            # --- NEW DEBUGGING LOGIC ---
+            if p.returncode != 0:
+                print(f"[ERROR] GPU {gpu} Test Failed (Code {p.returncode}):")
+                if err: print(err.strip())
+                if out: print(out.strip())
+            # ---------------------------
+
             if out:
                 # print(out) # DEBUG: Uncomment if you still see N/A
                 for line in out.split('\n'):
@@ -929,7 +948,17 @@ inline hipError_t hipSetDevice(int dev) { return hipSuccess; }
 inline hipError_t hipGetDeviceProperties(hipDeviceProp_t* p, int d) { p->multiProcessorCount = 1; return hipSuccess; }
 inline hipError_t hipDeviceSynchronize() { return hipSuccess; }
 inline hipError_t hipMemGetInfo(size_t* f, size_t* t) { *f=1e9; *t=2e9; return hipSuccess; }
-inline hipError_t hipMalloc(void** p, size_t s) { *p = malloc(s); return hipSuccess; }
+
+// FIX 1: Add missing Error String function used by CHECK macro
+inline const char* hipGetErrorString(hipError_t error) { return "Mock Success"; }
+
+// FIX 2: Template hipMalloc to accept uint4** directly (fixes 'invalid conversion' error)
+template <typename T>
+inline hipError_t hipMalloc(T** p, size_t s) {
+    *p = (T*)malloc(s);
+    return hipSuccess;
+}
+
 inline hipError_t hipFree(void* p) { free(p); return hipSuccess; }
 inline hipError_t hipMemset(void* p, int v, size_t s) { memset(p, v, s); return hipSuccess; }
 
@@ -1553,27 +1582,26 @@ int main(int argc, char* argv[]) {
     CHECK(hipMemGetInfo(&free, &total));
     if (mem_pct > 99) mem_pct = 99;
     size_t alloc_size = (free * mem_pct) / 100;
-    size_t num_elements = alloc_size / 16; 
+    size_t num_elements = alloc_size / 16;
 
-    void* d_data;
+    // --- FIX: Change void* to uint4* ---
+    uint4* d_data;
     CHECK(hipMalloc(&d_data, alloc_size));
 
-    // Oversubscribe CUs
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
     int num_blocks = prop.multiProcessorCount * 20;
 
-    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM AGGRESSIVE WRITE (Crosstalk) | " 
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM AGGRESSIVE WRITE (Crosstalk) | "
               << mem_pct << "% VRAM | " << duration << "s" << std::endl;
-
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t bytes_transferred = 0;
 
     while (true) {
-	LAUNCH_KERNEL(hbm_write_agg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
+        // Use LAUNCH_KERNEL for CI compatibility
+        LAUNCH_KERNEL(hbm_write_agg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
-        
-        bytes_transferred += alloc_size;
 
+        bytes_transferred += alloc_size;
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
     }
@@ -1636,26 +1664,27 @@ int main(int argc, char* argv[]) {
     CHECK(hipMemGetInfo(&free, &total));
     if (mem_pct > 99) mem_pct = 99;
     size_t alloc_size = (free * mem_pct) / 100;
-    size_t num_elements = alloc_size / 16; 
+    size_t num_elements = alloc_size / 16;
 
-    void* d_data;
+    // --- FIX: Change void* to uint4* ---
+    uint4* d_data;
     CHECK(hipMalloc(&d_data, alloc_size));
 
     // Oversubscribe CUs
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
     int num_blocks = prop.multiProcessorCount * 20;
 
-    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM WRITE (NT Store) | " 
+    std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM WRITE (NT Store) | "
               << mem_pct << "% VRAM | " << duration << "s" << std::endl;
-
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t bytes_transferred = 0;
 
     while (true) {
-	LAUNCH_KERNEL(hbm_write_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
+        // Use LAUNCH_KERNEL for CI compatibility
+        LAUNCH_KERNEL(hbm_write_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
         CHECK(hipDeviceSynchronize());
-        
-        bytes_transferred += alloc_size; // Write only
+
+        bytes_transferred += alloc_size;
 
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
@@ -1685,11 +1714,11 @@ void hbm_read_agg_kernel(uint4* data, size_t n, uint4* sink) {
     size_t stride = blockDim.x * gridDim.x;
 
     unsigned int a0 = 0, a1 = 0, a2 = 0, a3 = 0;
-    
     // Cast to volatile uint for safe, unoptimized reads
     volatile unsigned int* ptr = (volatile unsigned int*)data;
     size_t num_ints = n * 4; // uint4 = 4 uints
-    size_t step = stride * 4; // Stride in uints
+    size_t step = stride * 4;
+    // Stride in uints
 
     // Manual 16x Unroll
     for (size_t i = idx * 4; i + step * 15 < num_ints; i += step * 16) {
@@ -1697,17 +1726,14 @@ void hbm_read_agg_kernel(uint4* data, size_t n, uint4* sink) {
         a1 += ptr[i + step];
         a2 += ptr[i + step * 2];
         a3 += ptr[i + step * 3];
-        
         a0 += ptr[i + step * 4];
         a1 += ptr[i + step * 5];
         a2 += ptr[i + step * 6];
         a3 += ptr[i + step * 7];
-
         a0 += ptr[i + step * 8];
         a1 += ptr[i + step * 9];
         a2 += ptr[i + step * 10];
         a3 += ptr[i + step * 11];
-
         a0 += ptr[i + step * 12];
         a1 += ptr[i + step * 13];
         a2 += ptr[i + step * 14];
@@ -1737,7 +1763,8 @@ int main(int argc, char* argv[]) {
     CHECK(hipSetDevice(gpu_id));
 
     // 1. Calculate Available Memory
-    size_t free, total; CHECK(hipMemGetInfo(&free, &total));
+    size_t free, total;
+    CHECK(hipMemGetInfo(&free, &total));
     if (mem_pct > 99) mem_pct = 99;
     
     // 2. Alloc Source Data (The massive buffer)
@@ -1746,15 +1773,15 @@ int main(int argc, char* argv[]) {
     if (free - alloc_size < 50 * 1024 * 1024) {
         alloc_size = free - 50 * 1024 * 1024;
     }
-    size_t num_elements = alloc_size / 16; 
-
+    size_t num_elements = alloc_size / 16;
     // 3. Alloc Sink (Small buffer, just for results)
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
     int num_blocks = prop.multiProcessorCount * 20;
     size_t sink_size = num_blocks * BLOCK_SIZE * sizeof(uint4);
 
     uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
-    uint4* d_sink; CHECK(hipMalloc(&d_sink, sink_size)); // <-- FIX: Use small size
+    uint4* d_sink;
+    CHECK(hipMalloc(&d_sink, sink_size)); 
 
     // Init Data
     LAUNCH_KERNEL(init_data, num_blocks, BLOCK_SIZE, d_data, num_elements);
@@ -1762,16 +1789,15 @@ int main(int argc, char* argv[]) {
 
     std::cout << "[PANTHEON] GPU " << gpu_id << ": HBM READ AGG | " 
               << mem_pct << "% VRAM | " << duration << "s" << std::endl;
-
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t bytes_transferred = 0;
 
     while (true) {
-	LAUNCH_KERNEL(hbm_read_agg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
+        // --- FIX: Added d_sink argument ---
+        LAUNCH_KERNEL(hbm_read_agg_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements, d_sink);
         CHECK(hipDeviceSynchronize());
         
         bytes_transferred += alloc_size;
-
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;
     }
@@ -1847,6 +1873,7 @@ int main(int argc, char* argv[]) {
     uint4* d_data; CHECK(hipMalloc(&d_data, alloc_size));
     uint4* d_sink; CHECK(hipMalloc(&d_sink, sink_size));
 
+    // CI FIX: Use LAUNCH_KERNEL macro
     LAUNCH_KERNEL(init_data, num_blocks, BLOCK_SIZE, d_data, num_elements);
     CHECK(hipDeviceSynchronize());
 
@@ -1857,8 +1884,10 @@ int main(int argc, char* argv[]) {
     size_t bytes_transferred = 0;
 
     while (true) {
-	LAUNCH_KERNEL(hbm_read_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements);
+        // CI FIX: Use LAUNCH_KERNEL and include d_sink
+        LAUNCH_KERNEL(hbm_read_kernel, num_blocks, BLOCK_SIZE, d_data, num_elements, d_sink);
         CHECK(hipDeviceSynchronize());
+        
         bytes_transferred += alloc_size;
         auto now = std::chrono::high_resolution_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= duration) break;

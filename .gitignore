@@ -58,5 +58,6 @@ results/*
 database/*
 build/*
 
+full_codebase.txt
 
 __pycache___
