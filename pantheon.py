@@ -10,6 +10,7 @@ import platform
 import shutil
 import pandas as pd
 import numpy as np
+import atexit
 from monitor import HardwareMonitor
 
 # Try to import psutil, warn if missing
@@ -19,6 +20,23 @@ except ImportError:
     print("[PANTHEON] Warning: 'psutil' module not found. System info will be limited.")
     print("           Install it via: pip3 install psutil")
     psutil = None
+
+# --- GLOBAL PROCESS TRACKER (For Cleanup) ---
+ACTIVE_PROCS = []
+
+def cleanup_zombies():
+    """Kill any hanging subprocesses on exit."""
+    global ACTIVE_PROCS
+    for p in ACTIVE_PROCS:
+        if p.poll() is None:  # If still running
+            try:
+                p.kill()
+                print(f"[CLEANUP] Killed zombie process PID {p.pid}")
+            except:
+                pass
+
+# Register immediately so it catches early crashes
+atexit.register(cleanup_zombies)
 
 # --- Configuration ---
 BUILD_DIR = "build"
@@ -185,6 +203,7 @@ def build_kernels(platform):
     log("Build Complete.")
 
 def run_test(test_name, gpu_ids, duration, mem_pct):
+    global ACTIVE_PROCS  # Allow modifying the global list
     config = TEST_REGISTRY[test_name]
     binary = os.path.join(BUILD_DIR, config["bin"])
     procs = []
@@ -195,10 +214,12 @@ def run_test(test_name, gpu_ids, duration, mem_pct):
         log(f"Launching {test_name} on GPU {gpu} (Alloc: {mem_pct}% VRAM)...")
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         procs.append((gpu, p))
+        ACTIVE_PROCS.append(p)  # Track globaly
 
     return procs
 
 def main():
+    global ACTIVE_PROCS
     parser = argparse.ArgumentParser(description="PANTHEON: Universal GPU Stress Suite")
     parser.add_argument("--test", type=str, default="all", help=f"Test to run: {', '.join(TEST_REGISTRY.keys())} or 'all'")
     parser.add_argument("--duration", type=int, default=30, help="Duration in seconds per test")
@@ -256,11 +277,12 @@ def main():
         monitor.start_collection(target_gpus, run_dir)
 
         # 2. Run Kernels
+        # Reset active procs for this run (Global list accumulates, so we clear what's dead or manage it)
+        ACTIVE_PROCS = [] 
         procs = run_test(test, target_gpus, args.duration, args.mem)
         
         # 3. Watchdog Wait Loop
         start_wait = time.time()
-        # Allow 10 seconds of grace period over duration for initialization/cleanup
         timeout = args.duration + 10 
         
         try:
@@ -283,8 +305,7 @@ def main():
         except KeyboardInterrupt:
             print("\n[PANTHEON] Interrupted by user.")
             for gpu, p in procs: p.kill()
-            break
-
+            sys.exit(0) # Exit immediately so atexit handles clean up if anything remains
 
         # 4. Stop Monitor & Get Stats
         hw_stats = monitor.stop_collection() 
@@ -294,21 +315,16 @@ def main():
             out, err = p.communicate()
             throughput = "N/A"
             
-            # --- NEW DEBUGGING LOGIC ---
             if p.returncode != 0:
                 print(f"[ERROR] GPU {gpu} Test Failed (Code {p.returncode}):")
                 if err: print(err.strip())
                 if out: print(out.strip())
-            # ---------------------------
 
             if out:
-                # print(out) # DEBUG: Uncomment if you still see N/A
                 for line in out.split('\n'):
                     if "Throughput:" in line:
                         try:
-                            # Split by ":", take the right side
                             raw_val = line.split(":")[1].strip()
-                            # Extract just the number (remove GB/s, MAPS, etc)
                             number_part = raw_val.split(' ')[0] 
                             throughput = float(number_part)
                         except: 
@@ -353,7 +369,6 @@ def main():
     full_snapshot = get_system_snapshot(platform)
     full_snapshot["test_results"] = final_results
     
-    # Filename: pantheon_report_<timestamp>.json
     db_file = os.path.join(DATABASE_DIR, f"pantheon_report_{timestamp_str}.json")
     
     with open(db_file, "w") as f:

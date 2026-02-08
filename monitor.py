@@ -7,6 +7,12 @@ import numpy as np
 import csv
 import os
 
+# Try to import NVIDIA native bindings
+try:
+    import pynvml
+except ImportError:
+    pynvml = None
+
 class HardwareMonitor:
     def __init__(self, platform):
         self.platform = platform
@@ -15,6 +21,16 @@ class HardwareMonitor:
         self.running = False
         self.history = {} 
         self.thread = None
+        
+        # Initialize NVML (NVIDIA Native) if available
+        self.nvml_active = False
+        if self.has_nvidia_smi and pynvml:
+            try:
+                pynvml.nvmlInit()
+                self.nvml_active = True
+            except Exception as e:
+                print(f"[MONITOR] NVML Init failed: {e}. Falling back to nvidia-smi CLI.")
+                self.nvml_active = False
 
     def get_gpu_count(self):
         if self.platform == "HIP" and self.has_rocm_smi:
@@ -24,10 +40,15 @@ class HardwareMonitor:
                 return len(json.loads(out))
             except: return 1
         elif self.has_nvidia_smi:
-            try:
-                out = subprocess.check_output("nvidia-smi --query-gpu=count --format=csv,noheader", shell=True).decode()
-                return int(out.strip())
-            except: return 1
+            if self.nvml_active:
+                try:
+                    return pynvml.nvmlDeviceGetCount()
+                except: return 1
+            else:
+                try:
+                    out = subprocess.check_output("nvidia-smi --query-gpu=count --format=csv,noheader", shell=True).decode()
+                    return int(out.strip())
+                except: return 1
         return 1
 
     def start_collection(self, gpu_ids, output_dir="."):
@@ -65,6 +86,11 @@ class HardwareMonitor:
             time.sleep(1)
         
         self.csv_file.close()
+        
+        # Shutdown NVML on exit if active
+        if self.nvml_active:
+            try: pynvml.nvmlShutdown()
+            except: pass
 
     def stop_collection(self):
         self.running = False
@@ -80,15 +106,15 @@ class HardwareMonitor:
             for gid in gpu_ids:
                 # card0, card1... or gpu0... try to find the key
                 card_key = f"card{gid}"
+                keys = list(data.keys())
+                
+                # Robust Key Finding
                 if card_key not in data: 
-                    # Try finding by index if cardN naming fails
-                    keys = list(data.keys())
                     if len(keys) > gid: card_key = keys[gid]
                 
                 if card_key in data:
                     c = data[card_key]
                     
-                    # --- ROBUST KEY SEARCH ---
                     # 1. Temperature (Prioritize HBM/Junction, Fallback to Edge)
                     t_val = 0
                     for k, v in c.items():
@@ -124,27 +150,70 @@ class HardwareMonitor:
             pass
 
     def _poll_nvidia(self, gpu_ids):
-        try:
-            cmd = "nvidia-smi --query-gpu=index,temperature.gpu,power.draw,clocks.gr --format=csv,noheader,nounits"
-            out = subprocess.check_output(cmd, shell=True).decode()
-            for line in out.strip().split('\n'):
-                parts = line.split(',')
-                idx = int(parts[0])
-                if idx in self.history:
-                    self.history[idx]['temp'].append(float(parts[1]))
-                    self.history[idx]['pwr'].append(float(parts[2]))
-                    self.history[idx]['clk'].append(float(parts[3]))
-        except: pass
+        # PATH A: Native NVML (Fast)
+        if self.nvml_active:
+            try:
+                for gid in gpu_ids:
+                    handle = pynvml.nvmlDeviceGetHandleByIndex(gid)
+                    
+                    # Temp
+                    temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                    self.history[gid]['temp'].append(temp)
+                    
+                    # Power (mW -> W)
+                    try:
+                        pwr = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
+                    except: pwr = 0
+                    self.history[gid]['pwr'].append(pwr)
+                    
+                    # Clock (MHz)
+                    try:
+                        clk = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
+                    except: clk = 0
+                    self.history[gid]['clk'].append(clk)
+            except: 
+                pass
+        
+        # PATH B: Legacy CLI Parsing (Slow Fallback)
+        else:
+            try:
+                cmd = "nvidia-smi --query-gpu=index,temperature.gpu,power.draw,clocks.gr --format=csv,noheader,nounits"
+                out = subprocess.check_output(cmd, shell=True).decode()
+                for line in out.strip().split('\n'):
+                    parts = line.split(',')
+                    idx = int(parts[0])
+                    if idx in self.history:
+                        self.history[idx]['temp'].append(float(parts[1]))
+                        self.history[idx]['pwr'].append(float(parts[2]))
+                        self.history[idx]['clk'].append(float(parts[3]))
+            except: pass
 
     def _aggregate(self):
         stats = {}
         for gid, data in self.history.items():
-            # If no data collected (e.g. sensor failure), avoid crash with default 0
+            # Calculate Averages/Max
+            avg_temp = round(np.mean(data['temp']), 1) if data['temp'] else 0
+            max_temp = round(np.max(data['temp']), 1) if data['temp'] else 0
+            avg_pwr  = round(np.mean(data['pwr']), 1) if data['pwr'] else 0
+            max_pwr  = round(np.max(data['pwr']), 1) if data['pwr'] else 0
+            avg_clk  = round(np.mean(data['clk']), 0) if data['clk'] else 0
+            max_clk  = round(np.max(data['clk']), 0) if data['clk'] else 0
+
+            # --- Throttling Detection ---
+            # Heuristic: If we hit high temps (>80C) and average clock is 
+            # significantly lower (<85%) than max clock, we are likely throttling.
+            throttled = False
+            if max_temp > 80 and max_clk > 0:
+                if avg_clk < (max_clk * 0.85):
+                    throttled = True
+
             stats[gid] = {
-                "avg_temp": round(np.mean(data['temp']), 1) if data['temp'] else 0,
-                "max_temp": round(np.max(data['temp']), 1) if data['temp'] else 0,
-                "avg_pwr":  round(np.mean(data['pwr']), 1) if data['pwr'] else 0,
-                "max_pwr":  round(np.max(data['pwr']), 1) if data['pwr'] else 0,
-                "avg_clk":  round(np.mean(data['clk']), 0) if data['clk'] else 0,
+                "avg_temp": avg_temp,
+                "max_temp": max_temp,
+                "avg_pwr":  avg_pwr,
+                "max_pwr":  max_pwr,
+                "avg_clk":  avg_clk,
+                "max_clk":  max_clk,
+                "throttled": throttled
             }
         return stats
