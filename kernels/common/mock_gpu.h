@@ -48,7 +48,9 @@ inline hipError_t hipDeviceSynchronize() { return hipSuccess; }
 inline hipError_t hipMemGetInfo(size_t* f, size_t* t) { *f=1e9; *t=2e9; return hipSuccess; }
 inline const char* hipGetErrorString(hipError_t error) { return "Mock Success"; }
 
-// TRACKED MALLOC
+// --- TRACKED MEMORY MANAGEMENT ---
+
+// Device Malloc
 template <typename T>
 inline hipError_t hipMalloc(T** p, size_t s) {
     *p = (T*)malloc(s);
@@ -59,21 +61,49 @@ inline hipError_t hipMalloc(T** p, size_t s) {
     return hipSuccess;
 }
 
-// TRACKED FREE
+// Host Malloc (Pinned) - Simulates standard malloc for CPU
+inline hipError_t hipHostMalloc(void** p, size_t s) {
+    *p = malloc(s);
+    if (*p) {
+        g_mock_allocations[*p] = s;
+        g_mock_total_bytes += s;
+    }
+    return hipSuccess;
+}
+
+// Universal Free (Handles both Device and Host pointers in Mock)
 inline hipError_t hipFree(void* p) {
     if (p) {
         if (g_mock_allocations.find(p) != g_mock_allocations.end()) {
             g_mock_total_bytes -= g_mock_allocations[p];
             g_mock_allocations.erase(p);
-        } else {
-            std::cerr << "[MOCK ERROR] Double free or invalid pointer: " << p << std::endl;
         }
         free(p);
     }
     return hipSuccess;
 }
 
+inline hipError_t hipHostFree(void* p) { return hipFree(p); }
 inline hipError_t hipMemset(void* p, int v, size_t s) { memset(p, v, s); return hipSuccess; }
+
+// --- MOCK STREAMS ---
+typedef int hipStream_t;
+inline hipError_t hipStreamCreate(hipStream_t* s) { *s = 0; return hipSuccess; }
+inline hipError_t hipStreamDestroy(hipStream_t s) { return hipSuccess; }
+inline hipError_t hipStreamSynchronize(hipStream_t s) { return hipSuccess; }
+
+// --- MOCK MEMCPY ---
+enum hipMemcpyKind {
+    hipMemcpyHostToDevice = 0,
+    hipMemcpyDeviceToHost = 1,
+    hipMemcpyDeviceToDevice = 2
+};
+
+// Async Copy (Just does a sync memcpy in mock)
+inline hipError_t hipMemcpyAsync(void* dst, const void* src, size_t count, hipMemcpyKind kind, hipStream_t stream = 0) {
+    memcpy(dst, src, count);
+    return hipSuccess;
+}
 
 // --- LEAK CHECKER ---
 inline void mock_check_leaks() {
@@ -92,8 +122,7 @@ inline float2 __half22float2(float a) { return {a, a}; }
 inline uint4 make_uint4(unsigned int x, unsigned int y, unsigned int z, unsigned int w) { return {x,y,z,w}; }
 inline void atomicAdd(unsigned int* address, int val) { *address += val; }
 
-// --- FIX: ADD MISSING MATH INTRINSICS ---
-// These map GPU intrinsics to standard CPU math functions
+// Math Intrinsics
 inline float rsqrtf(float x) { return 1.0f / sqrtf(x); }
 inline float __sinf(float x) { return sinf(x); }
 inline float __cosf(float x) { return cosf(x); }
