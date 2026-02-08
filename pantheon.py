@@ -211,6 +211,18 @@ def main():
     else:
         target_gpus = [int(x) for x in args.gpu.split(",")]
 
+    # --- NEW: Display GPU Information ---
+    print("\n" + "="*60)
+    print("PANTHEON SYSTEM DETECTED")
+    print("="*60)
+    gpu_info = get_gpu_static_info()
+    if not gpu_info:
+        print(f"Platform: {platform} (No detailed GPU info available via SMI)")
+    else:
+        for g in gpu_info:
+            print(f"GPU {g['id']}: {g['name']} | {g['memory_total']} VRAM | Driver: {g['driver_version']}")
+    print("="*60 + "\n")
+
     # --- Result Folder Setup ---
     timestamp_str = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = os.path.join(RESULTS_BASE_DIR, timestamp_str)
@@ -252,6 +264,13 @@ def main():
             out, err = p.communicate()
             throughput = "N/A"
             
+            # --- NEW DEBUGGING LOGIC ---
+            if p.returncode != 0:
+                print(f"[ERROR] GPU {gpu} Test Failed (Code {p.returncode}):")
+                if err: print(err.strip())
+                if out: print(out.strip())
+            # ---------------------------
+
             if out:
                 # print(out) # DEBUG: Uncomment if you still see N/A
                 for line in out.split('\n'):
