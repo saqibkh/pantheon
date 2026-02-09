@@ -1,0 +1,146 @@
+[
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_write",
+    "throughput": 776.368,
+    "power": 264.5,
+    "efficiency": 0,
+    "date": "2026-02-08 18:52:53"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_write_agg",
+    "throughput": 2943.4,
+    "power": 267.5,
+    "efficiency": 0,
+    "date": "2026-02-08 18:52:53"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_read",
+    "throughput": 835.27,
+    "power": 276.3,
+    "efficiency": 0,
+    "date": "2026-02-08 18:52:53"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_read_agg",
+    "throughput": 844.581,
+    "power": 275.8,
+    "efficiency": 0,
+    "date": "2026-02-08 18:52:53"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "pcie_bandwidth",
+    "throughput": 3.2845,
+    "power": 146.4,
+    "efficiency": 0,
+    "date": "2026-02-08 18:52:53"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "atomic_virus",
+    "throughput": 32357.4,
+    "power": 223.7,
+    "efficiency": 0,
+    "date": "2026-02-08 18:52:53"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_write",
+    "throughput": 687.416,
+    "power": 248.4,
+    "efficiency": 2833.79,
+    "date": "2026-02-08 19:06:12"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_write_agg",
+    "throughput": 2834.11,
+    "power": 259.7,
+    "efficiency": 11174.93,
+    "date": "2026-02-08 19:06:12"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_read",
+    "throughput": 804.758,
+    "power": 273.6,
+    "efficiency": 3011.96,
+    "date": "2026-02-08 19:06:12"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_read_agg",
+    "throughput": 834.03,
+    "power": 275.9,
+    "efficiency": 3095.49,
+    "date": "2026-02-08 19:06:12"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "pcie_bandwidth",
+    "throughput": 3.28549,
+    "power": 148.1,
+    "efficiency": 22.72,
+    "date": "2026-02-08 19:06:12"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "atomic_virus",
+    "throughput": 39147.8,
+    "power": 234.1,
+    "efficiency": 171240.27,
+    "date": "2026-02-08 19:06:12"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_write",
+    "throughput": 750.144,
+    "power": 258.2,
+    "efficiency": 2975.01,
+    "date": "2026-02-08 19:31:37"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_write_agg",
+    "throughput": 2908.77,
+    "power": 264.8,
+    "efficiency": 11248.42,
+    "date": "2026-02-08 19:31:37"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_read",
+    "throughput": 828.495,
+    "power": 275.8,
+    "efficiency": 3076.07,
+    "date": "2026-02-08 19:31:37"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "hbm_read_agg",
+    "throughput": 839.539,
+    "power": 276.2,
+    "efficiency": 3112.56,
+    "date": "2026-02-08 19:31:37"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "pcie_bandwidth",
+    "throughput": 3.2856,
+    "power": 145.3,
+    "efficiency": 23.16,
+    "date": "2026-02-08 19:31:37"
+  },
+  {
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "test": "atomic_virus",
+    "throughput": 79859.8,
+    "power": 280.3,
+    "efficiency": 291746.11,
+    "date": "2026-02-08 19:31:37"
+  }
+]

@@ -1,0 +1,29 @@
+name: Deploy Website
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+
+      - name: Install Dependencies
+        run: pip install mkdocs-material
+
+      - name: Generate Web Data
+        run: python3 website_utils/generate_web_data.py
+
+      - name: Build and Deploy
+        run: mkdocs gh-deploy --force

@@ -1,0 +1,57 @@
+site_name: PANTHEON
+site_description: Universal GPU Stress & Diagnostics Suite
+site_url: https://saqikhan.github.io/pantheon/
+repo_url: https://github.com/saqikhan/pantheon
+repo_name: saqikhan/pantheon
+edit_uri: ""
+
+theme:
+  name: material
+  logo: assets/icon.png
+  favicon: assets/favicon.png
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+  palette:
+    # Dark Mode (Default)
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+    # Light Mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+# Extensions for better tables, grid layouts, and code blocks
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - attr_list
+  - md_in_html
+
+extra_css:
+  - css/extra.css
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/apexcharts
+  - js/charts.js

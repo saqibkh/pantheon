@@ -1,0 +1,90 @@
+/* --- Global Aesthetics --- */
+:root {
+  --md-hue: 260;
+  --md-primary-fg-color: #6200ea; /* Deep Purple */
+  --md-primary-bg-color: #000000; /* True Black */
+  
+  /* Custom Variables */
+  --pantheon-neon-blue: #00f3ff;
+  --pantheon-neon-green: #00e396;
+  --pantheon-dark-bg: #050505;
+  --pantheon-card-bg: #111111;
+  --pantheon-border: #333;
+}
+
+body {
+  background-color: var(--pantheon-dark-bg);
+}
+
+/* --- Typography --- */
+body, input, .md-nav__link {
+  font-family: 'Roboto', sans-serif;
+}
+pre, code, .md-code {
+  font-family: 'Roboto Mono', 'Fira Code', monospace !important;
+}
+
+/* --- Hero / Headers --- */
+h1 {
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(to right, #fff, #aaa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Benchmark Cards (The "Wow" Factor) --- */
+.chart-container {
+  background: var(--pantheon-card-bg);
+  border: 1px solid var(--pantheon-border);
+  border-radius: 12px;
+  padding: 25px;
+  margin-bottom: 40px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle glowing border animation on hover */
+.chart-container:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 243, 255, 0.15);
+  border-color: var(--pantheon-neon-blue);
+}
+
+.chart-container::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--pantheon-neon-blue), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.chart-container:hover::before {
+  opacity: 1;
+}
+
+/* --- Navigation Bar (Glassmorphism) --- */
+.md-header {
+  background-color: rgba(0,0,0,0.85) !important;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #222;
+}
+
+/* --- Tables --- */
+.md-typeset table:not([class]) {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  border: 1px solid #222;
+}
+.md-typeset table:not([class]) th {
+  background-color: #1a1a1a;
+  color: var(--pantheon-neon-blue);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
