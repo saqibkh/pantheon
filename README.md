@@ -24,8 +24,8 @@ python3 pantheon.py --test pulse_virus --duration 60
 
 | Test Name | Target Subsystem | Failure Symptoms |
 | :--- | :--- | :--- |
-| **`hbm_write_agg`** | VRAM & Infinity Fabric | Driver timeout, artifacts, system freeze. |
-| **`hbm_read_agg`** | Memory Controller (IMC) | Stuttering, black screen. |
+| hbm_write_agg | VRAM & Infinity Fabric | Driver timeout, artifacts, system freeze. |
+| hbm_read_agg | Memory Controller (IMC) | Stuttering, black screen. |
 | **`tensor_virus`** | Tensor Cores (FP16 Matrix) | Maximum Power Draw, VRM shutdown (Black screen). |
 | **`sfu_stress`** | Special Function Units (SIN/COS/DIV) | Arithmetic errors, high "Hotspot" temperatures. |
 | **`pulse_virus`** | VRM Transients (dI/dt) | **Instant Shutdown** (Trips PSU/OCP protection). |
