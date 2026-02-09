@@ -34,3 +34,23 @@ python3 pantheon.py --test pulse_virus --duration 60
 | **`atomic_virus`** | L2 Cache & ROPs | Application crashes, erratic performance. |
 | **`incinerator`** | Vector ALUs + SRAM | General instability, core clock drops. |
 | **`cache_lat`** | Memory Latency Pointer Chasing | Random reboots, blue screens. |
+
+
+## Interpretation of Results
+
+The summary report (`results/<timestamp>/summary.xlsx`) contains detailed "Pro" metrics. Here is how to interpret them:
+
+* **Efficiency (MB/J):** Calculated as `Throughput / Watts`.
+    * **Healthy:** Stays relatively constant.
+    * **Degraded:** If this drops significantly during a 1-hour burn-in, your silicon is "leaking" current (thermal runaway) or the VRMs are becoming inefficient due to heat.
+* **PCIe Link:** Verifies the physical connection speed (e.g., `Gen4 x16`).
+    * **Red Flag:** If it drops to `x8` or `Gen3` under load, check your riser cable, motherboard slot, or GPU mounting pressure.
+* **Throttle Reason:** Tells you *why* performance is limited.
+    * `[POWER]`: **Normal.** The card hit its TDP limit (expected for viruses).
+    * `[THERMAL]`: **Critical.** The core is overheating (usually >83°C). Check thermal paste.
+    * `[VOLTAGE]`: The VRMs cannot supply enough stable voltage.
+* **Max Mem Temp:** The hottest point on your VRAM (HBM/GDDR6X).
+    * **Note:** This is often 15-20°C hotter than the Core Temp. Keep this under 100°C to avoid permanent damage.
+* **Throughput (GB/s):**
+    * For `hbm_read` / `hbm_write`, this should be within 90% of your card's theoretical max bandwidth.
+    * Low throughput = Memory Controller instability or aggressive error correction (ECC) kicking in.
