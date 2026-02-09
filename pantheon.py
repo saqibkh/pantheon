@@ -13,6 +13,17 @@ import numpy as np
 import atexit
 from monitor import HardwareMonitor
 
+class NumpyEncoder(json.JSONEncoder):
+    """ Special json encoder for numpy types """
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyEncoder, self).default(obj)
+
 # Try to import psutil, warn if missing
 try:
     import psutil
@@ -396,9 +407,11 @@ def main():
     db_file = os.path.join(DATABASE_DIR, f"pantheon_report_{timestamp_str}.json")
     
     with open(db_file, "w") as f:
-        json.dump(full_snapshot, f, indent=4)
+        # Added cls=NumpyEncoder to automatically convert int64/float64 types
+        json.dump(full_snapshot, f, indent=4, cls=NumpyEncoder)
     
     log(f"Snapshot saved to: {db_file}")
+
 
 if __name__ == "__main__":
     main()
