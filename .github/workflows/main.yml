@@ -1,52 +1,48 @@
 name: Pantheon CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
-  # --- METHOD 2: COMPILE CHECK (NVIDIA) ---
-  # Verifies that code is valid CUDA/HIP code using real NVCC.
-  compile-verification:
+  # --- JOB 1: REAL GPU COMPILATION CHECK ---
+  # Verifies that code is valid CUDA syntax using the official NVIDIA container.
+  # This catches GPU-specific syntax errors (like __shfl_sync) that GCC misses.
+  cuda-build-check:
     runs-on: ubuntu-latest
     container: nvidia/cuda:12.3.1-devel-ubuntu22.04
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Tools
-        run: apt-get update && apt-get install -y python3 build-essential
+      - name: Install Build Tools
+        run: apt-get update && apt-get install -y build-essential python3
 
-      - name: Compile All Kernels (Dry Run)
-        # We manually invoke make. Since we are in an NVIDIA container, 
-        # PLATFORM=CUDA will be detected or forced.
-        run: |
-          make PLATFORM=CUDA
-          echo "Compilation Successful!"
+      - name: Compile (CUDA Mode)
+        # The Makefile detects NVCC and compiles for a real GPU target
+        run: make PLATFORM=CUDA
 
-  # --- METHOD 1: CPU MOCK SIMULATION ---
-  # Compiles with g++ (pretending to be GPU) and actually RUNS the code.
-  cpu-logic-test:
+  # --- JOB 2: CPU LOGIC SIMULATION ---
+  # Compiles with G++ (Mock Mode) and runs the Python harness.
+  # This verifies:
+  # 1. The Python script works (pantheon.py).
+  # 2. The Kernels don't crash (Segfaults).
+  # 3. No memory leaks (via your new MockLeakDetector).
+  cpu-mock-test:
     runs-on: ubuntu-latest
+    env:
+      PANTHEON_MOCK: "1"  # Tells pantheon.py to allow running without a GPU
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Python Deps
-        run: pip3 install numpy pandas psutil openpyxl
+      - name: Install Python Dependencies
+        run: pip3 install psutil pandas openpyxl numpy
 
-      - name: Compile with Mock
-        # We define PANTHEON_MOCK to trigger the CPU headers
-        # We use -x c++ to force g++ to treat .cu/.cpp files as standard C++
-        run: |
-          mkdir -p build
-          # Example: Compile hbm_read using g++ and Mock Header
-          g++ -DPANTHEON_MOCK -Ikernels/common -O3 kernels/hbm_read/hbm_read.cpp -o build/hbm_read
-          
-          # You can add a loop here to compile all of them:
-          # for f in kernels/*/*.cpp; do 
-          #   name=$(basename $f .cpp)
-          #   g++ -DPANTHEON_MOCK -Ikernels/common -O3 $f -o build/$name
-          # done
+      - name: Compile (Mock Mode)
+        # Uses the Makefile to compile all .cpp files using g++
+        run: make PLATFORM=MOCK
 
-      - name: Run Test Logic
-        # This actually executes the binary on the GitHub CPU runner!
-        run: |
-          # Fake args: GPU_ID=0, Duration=2s, Mem=1%
-          ./build/hbm_read 0 2 1
+      - name: Run Full Test Suite (Simulation)
+        # Runs EVERY test for 2 seconds to ensure stability
+        run: python3 pantheon.py --test all --duration 2

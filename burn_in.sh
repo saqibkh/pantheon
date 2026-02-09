@@ -16,9 +16,9 @@ python3 pantheon.py --test hbm_read_agg --duration 600
 # Phase 3: Mixed Load (40 Mins)
 # Cycles through all tests to find transient instability
 echo "[Phase 3] Mixed Cycle Loop"
-for i in {1..8}
+for i in {1..3}
 do
-   echo "Loop $i / 8"
+   echo "Loop $i / 3"
    python3 pantheon.py --test all --duration 300
 done
 

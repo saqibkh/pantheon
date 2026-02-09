@@ -14,34 +14,43 @@ python3 pantheon.py --test all --duration 30
 # Run a specific "Power Virus" test
 python3 pantheon.py --test tensor_virus --duration 60
 
-Test RegistryTest NameTarget SubsystemFailure Symptomshbm_readVRAM Controller (Read)Screen artifacts, system freeze.hbm_write_aggInfinity Fabric / L2 CacheDriver timeout, massive stutter.tensor_virusTensor/Matrix Cores (FP16)Thermal Throttling, VRM shutdown (Black screen).atomic_virusROPs & L2 AtomicsApplication crashes, erratic performance.incineratorVector ALUs + SRAMGeneral instability, core clock drops.Interpretation of ResultsThroughput: For Read tests, this should match your card's theoretical max bandwidth.Power: tensor_virus should generate the highest power draw (W).Temps: incinerator or tensor_virus should generate the highest Hotspot temps.
-### **Bonus: The "Burn-In" Script**
-If you want to use this to test the stability of an overclock or a used GPU, create this shell script to run a 1-hour cyclic burn-in.
+# Run the full suite (30 seconds per test)
+python3 pantheon.py --test all --duration 30
 
-**Create File: `burn_in.sh`**
+# Run a specific "VRM Cracker" test
+python3 pantheon.py --test pulse_virus --duration 60
+```
 
-```bash
-#!/bin/bash
-echo "Starting 1-Hour Stability Burn-In..."
+## Test Registry
 
-# 1. Heat up the loop (Matrix Cores) - 10 Minutes
-echo "[Phase 1] Thermal Shock (Tensor Virus)"
-python3 pantheon.py --test tensor_virus --duration 600
+| Test Name | Target Subsystem | Failure Symptoms |
+| :--- | :--- | :--- |
+| **`hbm_write_agg`** | VRAM & Infinity Fabric | Driver timeout, artifacts, system freeze. |
+| **`hbm_read_agg`** | Memory Controller (IMC) | Stuttering, black screen. |
+| **`tensor_virus`** | Tensor Cores (FP16 Matrix) | Maximum Power Draw, VRM shutdown (Black screen). |
+| **`sfu_stress`** | Special Function Units (SIN/COS/DIV) | Arithmetic errors, high "Hotspot" temperatures. |
+| **`pulse_virus`** | VRM Transients (dI/dt) | **Instant Shutdown** (Trips PSU/OCP protection). |
+| **`pcie_bandwidth`** | PCIe Bus & DMA Engine | Low FPS, Stuttering, Audio crackling. |
+| **`atomic_virus`** | L2 Cache & ROPs | Application crashes, erratic performance. |
+| **`incinerator`** | Vector ALUs + SRAM | General instability, core clock drops. |
+| **`cache_lat`** | Memory Latency Pointer Chasing | Random reboots, blue screens. |
 
-# 2. Thrash the Memory Controller - 10 Minutes
-echo "[Phase 2] Memory Controller Saturation"
-python3 pantheon.py --test hbm_read_agg --duration 600
 
-# 3. Thrash the Cache/Fabric - 10 Minutes
-echo "[Phase 3] Fabric/L2 Stress"
-python3 pantheon.py --test atomic_virus --duration 600
+## Interpretation of Results
 
-# 4. Mixed Loop (All tests cycling) - 30 Minutes
-echo "[Phase 4] Mixed Cycle"
-for i in {1..5}
-do
-   python3 pantheon.py --test all --duration 60
-done
+The summary report (`results/<timestamp>/summary.xlsx`) contains detailed "Pro" metrics. Here is how to interpret them:
 
-echo "Burn-In Complete. Check database/ folder for logs."
-You can make it executable with chmod +x burn_in.sh
+* **Efficiency (MB/J):** Calculated as `Throughput / Watts`.
+    * **Healthy:** Stays relatively constant.
+    * **Degraded:** If this drops significantly during a 1-hour burn-in, your silicon is "leaking" current (thermal runaway) or the VRMs are becoming inefficient due to heat.
+* **PCIe Link:** Verifies the physical connection speed (e.g., `Gen4 x16`).
+    * **Red Flag:** If it drops to `x8` or `Gen3` under load, check your riser cable, motherboard slot, or GPU mounting pressure.
+* **Throttle Reason:** Tells you *why* performance is limited.
+    * `[POWER]`: **Normal.** The card hit its TDP limit (expected for viruses).
+    * `[THERMAL]`: **Critical.** The core is overheating (usually >83°C). Check thermal paste.
+    * `[VOLTAGE]`: The VRMs cannot supply enough stable voltage.
+* **Max Mem Temp:** The hottest point on your VRAM (HBM/GDDR6X).
+    * **Note:** This is often 15-20°C hotter than the Core Temp. Keep this under 100°C to avoid permanent damage.
+* **Throughput (GB/s):**
+    * For `hbm_read` / `hbm_write`, this should be within 90% of your card's theoretical max bandwidth.
+    * Low throughput = Memory Controller instability or aggressive error correction (ECC) kicking in.

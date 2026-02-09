@@ -1,36 +1,20 @@
 #include "../common/common.h"
 #include <chrono>
-
-// --- HEADER FIX FOR CUDA/HIP ---
-#ifdef __CUDACC__
-    #include <cuda_fp16.h>
-#else
-    #include <hip/hip_fp16.h>
-#endif
+#include "../common/fp16_shim.h"
 
 // --- TENSOR VIRUS (FP16 HAMMER) ---
 // Uses Half-Precision (FP16) to saturate Tensor/Matrix cores.
 __global__ void tensor_virus_kernel(int iters, float* sink) {
     size_t tid = threadIdx.x;
     
-    // Initialize Half-Precision Registers
-    // __half2 is a vector of two 16-bit floats (Packed FP16)
-#ifdef __CUDACC__
-    __half2 a = __float2half2_rn(1.0f);
-    __half2 b = __float2half2_rn(0.5f);
-    __half2 c = __float2half2_rn(-1.0f);
-#else
-    // AMD/ROCm often defines __half2 constructors differently in older versions,
-    // but newer HIP supports the standard CUDA-style naming:
-    __half2 a = __float2half2_rn(1.0f);
-    __half2 b = __float2half2_rn(0.5f);
-    __half2 c = __float2half2_rn(-1.0f);
-#endif
+    // Initialize Half-Precision Registers using Universal Shim
+    __half2 a = make_half2_universal(1.0f);
+    __half2 b = make_half2_universal(0.5f);
+    __half2 c = make_half2_universal(-1.0f);
 
     for(int i=0; i<iters; ++i) {
         // Universal FMA (Fused Multiply Add)
         // This works on both AMD (ROCm) and NVIDIA (CUDA)
-        // It maps to v_pk_fma_f16 on AMD and HMMA/HFMA on NVIDIA.
         a = __hfma2(a, b, c);
         b = __hfma2(b, c, a);
         c = __hfma2(c, a, b);
@@ -55,17 +39,14 @@ int main(int argc, char* argv[]) {
     float* d_sink; CHECK(hipMalloc(&d_sink, 1024 * sizeof(float)));
 
     hipDeviceProp_t prop; CHECK(hipGetDeviceProperties(&prop, gpu_id));
-    
     // Max Occupancy: Tensor tests need MASSIVE parallelism to fill the huge pipes.
-    // For RDNA/gfx1010, we want to saturate the vector ALUs.
-    int num_blocks = prop.multiProcessorCount * 32; 
+    int num_blocks = prop.multiProcessorCount * 32;
 
     std::cout << "[PANTHEON] GPU " << gpu_id << ": Running TENSOR VIRUS (FP16 Stress)..." << std::endl;
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    
     while(true) {
-	LAUNCH_KERNEL(tensor_virus_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
+        LAUNCH_KERNEL(tensor_virus_kernel, num_blocks, BLOCK_SIZE, 20000, d_sink);
         CHECK(hipDeviceSynchronize());
         
         auto now = std::chrono::high_resolution_clock::now();

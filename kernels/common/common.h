@@ -11,7 +11,6 @@
     #include "mock_gpu.h"
     
     // In Mock mode, "Launch" just calls the function directly on the CPU.
-    // We ignore grid/block dimensions since we are single-threaded here.
     #define LAUNCH_KERNEL(kernel_name, grid, block, ...) kernel_name(__VA_ARGS__)
 
 // ==========================================
@@ -34,13 +33,19 @@
         #define hipMalloc cudaMalloc
         #define hipFree cudaFree
         #define hipMemcpy cudaMemcpy
-        #define hipMemcpyDeviceToHost cudaMemcpyDeviceToHost
         #define hipMemGetInfo cudaMemGetInfo
         #define hipDeviceSynchronize cudaDeviceSynchronize
         #define hipStreamCreate cudaStreamCreate
         #define hipStreamDestroy cudaStreamDestroy
         #define hipStreamSynchronize cudaStreamSynchronize
         #define hipMemset cudaMemset 
+        
+        // --- NEW: PCIe / Async Mappings ---
+        #define hipHostMalloc(ptr, size) cudaMallocHost(ptr, size)
+        #define hipHostFree cudaFreeHost
+        #define hipMemcpyAsync cudaMemcpyAsync
+        #define hipMemcpyHostToDevice cudaMemcpyHostToDevice
+        #define hipMemcpyDeviceToHost cudaMemcpyDeviceToHost
 
     #else
         // AMD / ROCm MODE

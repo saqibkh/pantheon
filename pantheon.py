@@ -10,6 +10,7 @@ import platform
 import shutil
 import pandas as pd
 import numpy as np
+import atexit
 from monitor import HardwareMonitor
 
 # Try to import psutil, warn if missing
@@ -19,6 +20,23 @@ except ImportError:
     print("[PANTHEON] Warning: 'psutil' module not found. System info will be limited.")
     print("           Install it via: pip3 install psutil")
     psutil = None
+
+# --- GLOBAL PROCESS TRACKER (For Cleanup) ---
+ACTIVE_PROCS = []
+
+def cleanup_zombies():
+    """Kill any hanging subprocesses on exit."""
+    global ACTIVE_PROCS
+    for p in ACTIVE_PROCS:
+        if p.poll() is None:  # If still running
+            try:
+                p.kill()
+                print(f"[CLEANUP] Killed zombie process PID {p.pid}")
+            except:
+                pass
+
+# Register immediately so it catches early crashes
+atexit.register(cleanup_zombies)
 
 # --- Configuration ---
 BUILD_DIR = "build"
@@ -35,8 +53,9 @@ TEST_REGISTRY = {
     "voltage":        {"bin": "compute_virus",   "args": [], "desc": "Voltage Virus (ALU Hammer)"},
     "incinerator":    {"bin": "compute_virus_agg","args": [],"desc": "Incinerator (LDS Stress)"},
     "cache_lat":      {"bin": "cache_latency",   "args": [], "desc": "Cache Latency"},
-
-    # NEW TESTS
+    "sfu_stress":     {"bin": "sfu_stress",      "args": [], "desc": "SFU Virus (Transcendental Math)"},
+    "pcie_bandwidth": {"bin": "pcie_bandwidth",  "args": [], "desc": "PCIe Thrasher (Host <-> Device)"},
+    "pulse_virus":    {"bin": "pulse_virus",     "args": [], "desc": "Transient Pulse (VRM Attack 10Hz)"},
     "tensor_virus":   {"bin": "tensor_virus",    "args": [], "desc": "Tensor Virus (FP16 Matrix Power)"},
     "atomic_virus":   {"bin": "atomic_virus",    "args": [], "desc": "Atomic Virus (L2 Cache Thrash)"}
 }
@@ -159,10 +178,19 @@ def get_system_snapshot(platform_name):
 # --- Core Logic ---
 
 def detect_platform():
-    if subprocess.run("which hipcc", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
-        return "HIP"
-    if subprocess.run("which nvcc", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
-        return "CUDA"
+    # 1. Force Mock Mode via Environment Variable (for CI)
+    if os.environ.get("PANTHEON_MOCK") == "1":
+        return "MOCK"
+    
+    # 2. Try Auto-Detect
+    if shutil.which("hipcc"): return "HIP"
+    if shutil.which("nvcc"): return "CUDA"
+    
+    # 3. Fallback to Mock if nothing else found (Optional, good for local dev without GPU)
+    if shutil.which("g++"):
+        print("[PANTHEON] Warning: No GPU compiler found. Defaulting to CPU Mock mode.")
+        return "MOCK"
+        
     return "UNKNOWN"
 
 def build_kernels(platform):
@@ -176,6 +204,7 @@ def build_kernels(platform):
     log("Build Complete.")
 
 def run_test(test_name, gpu_ids, duration, mem_pct):
+    global ACTIVE_PROCS  # Allow modifying the global list
     config = TEST_REGISTRY[test_name]
     binary = os.path.join(BUILD_DIR, config["bin"])
     procs = []
@@ -186,10 +215,12 @@ def run_test(test_name, gpu_ids, duration, mem_pct):
         log(f"Launching {test_name} on GPU {gpu} (Alloc: {mem_pct}% VRAM)...")
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         procs.append((gpu, p))
+        ACTIVE_PROCS.append(p)  # Track globaly
 
     return procs
 
 def main():
+    global ACTIVE_PROCS
     parser = argparse.ArgumentParser(description="PANTHEON: Universal GPU Stress Suite")
     parser.add_argument("--test", type=str, default="all", help=f"Test to run: {', '.join(TEST_REGISTRY.keys())} or 'all'")
     parser.add_argument("--duration", type=int, default=30, help="Duration in seconds per test")
@@ -244,18 +275,39 @@ def main():
         log(f"--- STARTING TEST: {test.upper()} ---")
         
         # 1. Start Monitor
-        monitor.start_collection(target_gpus)
+        monitor.start_collection(target_gpus, run_dir)
 
         # 2. Run Kernels
+        # Reset active procs for this run (Global list accumulates, so we clear what's dead or manage it)
+        ACTIVE_PROCS = [] 
         procs = run_test(test, target_gpus, args.duration, args.mem)
         
-        # 3. Wait
-        try:
-            for gpu, p in procs: p.wait()
-        except KeyboardInterrupt:
-            for gpu, p in procs: p.kill()
-            break
+        # 3. Watchdog Wait Loop
+        start_wait = time.time()
+        timeout = args.duration + 10 
         
+        try:
+            while True:
+                all_done = True
+                for gpu, p in procs:
+                    if p.poll() is None: # Still running
+                        all_done = False
+                
+                if all_done:
+                    break
+                
+                if time.time() - start_wait > timeout:
+                    print(f"\n[WATCHDOG] Test exceeded {timeout}s limit. Terminating...")
+                    for gpu, p in procs:
+                        p.kill()
+                    break
+                
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\n[PANTHEON] Interrupted by user.")
+            for gpu, p in procs: p.kill()
+            sys.exit(0) # Exit immediately so atexit handles clean up if anything remains
+
         # 4. Stop Monitor & Get Stats
         hw_stats = monitor.stop_collection() 
 
@@ -264,27 +316,28 @@ def main():
             out, err = p.communicate()
             throughput = "N/A"
             
-            # --- NEW DEBUGGING LOGIC ---
             if p.returncode != 0:
                 print(f"[ERROR] GPU {gpu} Test Failed (Code {p.returncode}):")
                 if err: print(err.strip())
                 if out: print(out.strip())
-            # ---------------------------
 
             if out:
-                # print(out) # DEBUG: Uncomment if you still see N/A
                 for line in out.split('\n'):
                     if "Throughput:" in line:
                         try:
-                            # Split by ":", take the right side
                             raw_val = line.split(":")[1].strip()
-                            # Extract just the number (remove GB/s, MAPS, etc)
                             number_part = raw_val.split(' ')[0] 
                             throughput = float(number_part)
                         except: 
                             pass
             
             stats = hw_stats.get(gpu, {})
+
+            # Calculate Efficiency (MB/J)
+            eff = 0
+            if throughput != "N/A" and stats.get("avg_pwr", 0) > 0:
+                eff = round((throughput * 1024) / stats.get("avg_pwr"), 2)
+
             row = {
                 "Test Name": test,
                 "Description": TEST_REGISTRY[test]["desc"],
@@ -296,8 +349,19 @@ def main():
                 "Max Temp (C)": stats.get("max_temp", 0),
                 "Avg Power (W)": stats.get("avg_pwr", 0),
                 "Max Power (W)": stats.get("max_pwr", 0),
-                "Avg Clock (MHz)": stats.get("avg_clk", 0)
+                "Avg Clock (MHz)": stats.get("avg_clk", 0),
+                
+                # --- PRO METRICS ---
+                "Efficiency (MB/J)": eff,
+                "PCIe Gen": stats.get("pcie_gen", 0),
+                "PCIe Width": stats.get("pcie_width", 0),
+                "Limit Reason": stats.get("throttle_reason", "N/A"),
+                "Max Mem Temp (C)": stats.get("max_mem_temp", 0),
+                "Max Fan (%)": stats.get("max_fan", 0),
+                "Volts Core (mV)": stats.get("max_volts_core", 0),
+                "Volts SoC (mV)": stats.get("max_volts_soc", 0)
             }
+
             final_results.append(row)
             print(f"[RESULT] GPU {gpu} | {throughput} GB/s | {row['Max Temp (C)']}C Max | {row['Max Power (W)']}W Max")
 
@@ -305,13 +369,19 @@ def main():
 
     # --- Report Generation ---
     df = pd.DataFrame(final_results)
+    
     print("\n" + "="*80)
     print("FINAL SUMMARY REPORT")
     print("="*80)
-    print(df.drop(columns=["Description"]).to_string(index=False))
+    
+    # CONSOLE: Drop the new noisy columns + Description
+    cols_to_hide = ["Description", "Max Mem Temp (C)", "Max Fan (%)", 
+                    "Volts Core (mV)", "Volts SoC (mV)", "Limit Reason", "Efficiency (MB/J)"]
+    print(df.drop(columns=cols_to_hide, errors='ignore').to_string(index=False))
+    
     print("="*80)
 
-    # 1. Save Simple Reports (CSV/Excel) in results/ folder
+    # FILES: Save EVERYTHING (including new metrics)
     csv_path = os.path.join(run_dir, "summary.csv")
     xlsx_path = os.path.join(run_dir, "summary.xlsx")
     df.to_csv(csv_path, index=False)
@@ -323,7 +393,6 @@ def main():
     full_snapshot = get_system_snapshot(platform)
     full_snapshot["test_results"] = final_results
     
-    # Filename: pantheon_report_<timestamp>.json
     db_file = os.path.join(DATABASE_DIR, f"pantheon_report_{timestamp_str}.json")
     
     with open(db_file, "w") as f:
