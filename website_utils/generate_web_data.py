@@ -8,7 +8,6 @@ OUTPUT_FILE = "docs/assets/web_data.json"
 
 def main():
     # Dictionary to store only the BEST result for each GPU+Test combo
-    # Key: "GPU Name|Test Name" -> Value: Result Object
     best_runs = {}
     
     # Ensure output directory exists
@@ -25,17 +24,27 @@ def main():
             with open(f, 'r') as fp:
                 data = json.load(fp)
                 
-                # Extract GPU Name
-                gpu_name = "Unknown GPU"
-                if data.get("gpu_static_info") and len(data["gpu_static_info"]) > 0:
-                    gpu_name = data["gpu_static_info"][0]["name"]
+                # --- FIX: Create a Map of GPU ID -> GPU Name ---
+                # Instead of grabbing just index [0], we map all detected GPUs.
+                gpu_map = {}
+                if data.get("gpu_static_info"):
+                    for g in data["gpu_static_info"]:
+                        gpu_map[g["id"]] = g["name"]
                 
                 # Process each test result in this file
                 for test in data.get("test_results", []):
                     test_name = test["Test Name"]
                     
+                    # --- FIX: Retrieve the Correct Name for this Result ---
+                    # Default to ID 0 if missing, but try to use the specific ID
+                    gid = test.get("GPU ID", 0)
+                    gpu_name = gpu_map.get(gid, f"Unknown GPU {gid}")
+                    
+                    # Optional: If you want to distinguish identical cards (e.g. two 3090s),
+                    # uncomment the line below to append the ID to the name:
+                    # gpu_name = f"{gpu_name} #{gid}"
+
                     # --- SCORE NORMALIZATION ---
-                    # If Throughput is "N/A" (e.g. Power Virus), we use Peak Power as the score.
                     raw_score = test.get("Throughput (GB/s)", "N/A")
                     score_val = 0.0
                     unit = "GB/s"
@@ -61,7 +70,8 @@ def main():
                     }
 
                     # --- AGGREGATION LOGIC ---
-                    # Unique Key = GPU + Test Name
+                    # Unique Key = GPU Name + Test Name
+                    # This ensures an RTX 3090 and RTX 4090 are stored separately.
                     key = f"{gpu_name}|{test_name}"
 
                     # If this key doesn't exist, OR if this new score is higher, save it.
@@ -81,7 +91,7 @@ def main():
     with open(OUTPUT_FILE, 'w') as f:
         json.dump(final_list, f, indent=2)
     
-    print(f"[Generate] Success. Reduced {len(files)} reports into {len(final_list)} unique best runs.")
+    print(f"[Generate] Success. Processed {len(final_list)} unique results.")
 
 if __name__ == "__main__":
     main()
