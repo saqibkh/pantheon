@@ -88,3 +88,43 @@ h1 {
   font-size: 0.75rem;
   letter-spacing: 0.5px;
 }
+
+/* 1. Force the main container to span 95% of the viewport */
+.md-grid {
+  max-width: 95vw !important;
+  padding: 0 20px; /* Minimal padding on sides */
+}
+
+/* 2. Optimize Table for Wide Screens */
+#benchmarkTable {
+  width: 100%;
+  table-layout: auto; /* Allow columns to stretch based on content */
+}
+
+/* 3. Prevent awkward text wrapping in data cells */
+#benchmarkTable th,
+#benchmarkTable td {
+  white-space: nowrap;  /* Keep "RTX 4090" on one line */
+  padding: 12px 15px;   /* More breathing room */
+  font-size: 0.9rem;    /* Slight adjust for density */
+}
+
+/* 4. Keep the search bar and filters wide as well */
+#textSearch, #gpuFilter, #testFilter {
+  font-size: 1rem;
+}
+
+/* Target the first column (GPU Model) specifically */
+#benchmarkTable td:nth-child(1),
+#benchmarkTable th:nth-child(1) {
+    white-space: normal !important;  /* Override the 'nowrap' to allow breaking lines */
+    max-width: 200px;                /* Force a maximum width */
+    min-width: 150px;                /* Ensure it doesn't get too small */
+    word-wrap: break-word;           /* Break long words/names if necessary */
+    line-height: 1.4;                /* Improve readability for wrapped text */
+}
+
+/* Optional: Ensure other columns stay on one line for neatness */
+#benchmarkTable td:not(:nth-child(1)) {
+    white-space: nowrap;
+}
