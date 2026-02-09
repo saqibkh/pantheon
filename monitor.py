@@ -257,8 +257,8 @@ class HardwareMonitor:
         stats = {}
         for gid, data in self.history.items():
             # Helper for safe max/mean
-            def safe_max(l): return round(np.max(l), 1) if l else 0
-            def safe_mean(l): return round(np.mean(l), 1) if l else 0
+            def safe_max(l): return float(round(np.max(l), 1)) if l else 0
+            def safe_mean(l): return float(round(np.mean(l), 1)) if l else 0
 
             avg_clk = safe_mean(data['clk_core'])
             max_clk = safe_max(data['clk_core'])
