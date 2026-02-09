@@ -19,6 +19,7 @@ python3 pantheon.py --test all --duration 30
 
 # Run a specific "VRM Cracker" test
 python3 pantheon.py --test pulse_virus --duration 60
+'''
 
 ## Test Registry
 
