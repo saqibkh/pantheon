@@ -332,6 +332,12 @@ def main():
                             pass
             
             stats = hw_stats.get(gpu, {})
+
+            # Calculate Efficiency (MB/J)
+            eff = 0
+            if throughput != "N/A" and stats.get("avg_pwr", 0) > 0:
+                eff = round((throughput * 1024) / stats.get("avg_pwr"), 2)
+
             row = {
                 "Test Name": test,
                 "Description": TEST_REGISTRY[test]["desc"],
@@ -344,12 +350,18 @@ def main():
                 "Avg Power (W)": stats.get("avg_pwr", 0),
                 "Max Power (W)": stats.get("max_pwr", 0),
                 "Avg Clock (MHz)": stats.get("avg_clk", 0),
-
+                
+                # --- PRO METRICS ---
+                "Efficiency (MB/J)": eff,
+                "PCIe Gen": stats.get("pcie_gen", 0),
+                "PCIe Width": stats.get("pcie_width", 0),
+                "Limit Reason": stats.get("throttle_reason", "N/A"),
                 "Max Mem Temp (C)": stats.get("max_mem_temp", 0),
                 "Max Fan (%)": stats.get("max_fan", 0),
                 "Volts Core (mV)": stats.get("max_volts_core", 0),
                 "Volts SoC (mV)": stats.get("max_volts_soc", 0)
             }
+
             final_results.append(row)
             print(f"[RESULT] GPU {gpu} | {throughput} GB/s | {row['Max Temp (C)']}C Max | {row['Max Power (W)']}W Max")
 
@@ -363,7 +375,8 @@ def main():
     print("="*80)
     
     # CONSOLE: Drop the new noisy columns + Description
-    cols_to_hide = ["Description", "Max Mem Temp (C)", "Max Fan (%)", "Volts Core (mV)", "Volts SoC (mV)"]
+    cols_to_hide = ["Description", "Max Mem Temp (C)", "Max Fan (%)", 
+                    "Volts Core (mV)", "Volts SoC (mV)", "Limit Reason", "Efficiency (MB/J)"]
     print(df.drop(columns=cols_to_hide, errors='ignore').to_string(index=False))
     
     print("="*80)

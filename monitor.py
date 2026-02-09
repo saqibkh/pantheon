@@ -51,21 +51,22 @@ class HardwareMonitor:
 
     def start_collection(self, gpu_ids, output_dir="."):
         self.running = True
-        # Expanded Schema for new metrics
+        # Expanded Schema including PCIe and Throttle
         self.history = {gid: {
             'temp_core': [], 'temp_mem': [], 
             'pwr': [], 'clk_core': [], 
-            'fan_pct': [], 'volts_core': [], 'volts_soc': []
+            'fan_pct': [], 'volts_core': [], 'volts_soc': [],
+            'pcie_gen': [], 'pcie_width': [], 'throttle': [] # <--- NEW
         } for gid in gpu_ids}
         
         self.csv_file = open(os.path.join(output_dir, "time_series.csv"), "w", newline="")
         self.csv_writer = csv.writer(self.csv_file)
-        # Expanded Header for CSV Analysis
         self.csv_writer.writerow([
             "Timestamp", "GPU_ID", 
             "Temp_Core(C)", "Temp_Mem(C)", 
             "Power(W)", "Clock(MHz)", 
-            "Fan(%)", "Volts_Core(mV)", "Volts_SoC(mV)"
+            "Fan(%)", "Volts_Core(mV)", "Volts_SoC(mV)",
+            "PCIe_Gen", "PCIe_Width", "Throttle_Reason" # <--- NEW
         ])
         
         self.thread = threading.Thread(target=self._loop, args=(gpu_ids,))
@@ -92,7 +93,13 @@ class HardwareMonitor:
                     v_c = h['volts_core'][-1] if h['volts_core'] else 0
                     v_s = h['volts_soc'][-1] if h['volts_soc'] else 0
                     
-                    self.csv_writer.writerow([elapsed, gid, t_c, t_m, p, c, f, v_c, v_s])
+                    # --- FIX: Retrieve new metrics for CSV ---
+                    pg  = h['pcie_gen'][-1] if h['pcie_gen'] else 0
+                    pw  = h['pcie_width'][-1] if h['pcie_width'] else 0
+                    tr  = h['throttle'][-1] if h['throttle'] else "N/A"
+                    
+                    # --- FIX: Write all 12 columns to match header ---
+                    self.csv_writer.writerow([elapsed, gid, t_c, t_m, p, c, f, v_c, v_s, pg, pw, tr])
             
             self.csv_file.flush()
             time.sleep(1)
@@ -165,6 +172,17 @@ class HardwareMonitor:
                     h['pwr'].append(p_val)
                     h['clk_core'].append(clk_val)
 
+                    # 5. PCIe (AMD often reports in 'pcie_gen' or 'PCIE Generation')
+                    # This varies by driver version, simple heuristic:
+                    p_gen = 0; p_width = 0
+                    if "pcie_gen" in c: p_gen = c["pcie_gen"]
+                    if "pcie_lanes" in c: p_width = c["pcie_lanes"]
+                    h['pcie_gen'].append(p_gen)
+                    h['pcie_width'].append(p_width)
+
+                    # 6. Throttle (AMD Throttling is complex via JSON, using placeholder)
+                    h['throttle'].append("N/A")
+
         except Exception as e: pass
 
     def _poll_nvidia(self, gpu_ids):
@@ -199,6 +217,26 @@ class HardwareMonitor:
                     # Voltage (NVIDIA rarely exposes this via NVML, usually 0)
                     h['volts_core'].append(0)
                     h['volts_soc'].append(0)
+
+                    # PCIe
+                    try: h['pcie_gen'].append(pynvml.nvmlDeviceGetCurrPcieLinkGeneration(handle))
+                    except: h['pcie_gen'].append(0)
+
+                    try: h['pcie_width'].append(pynvml.nvmlDeviceGetCurrPcieLinkWidth(handle))
+                    except: h['pcie_width'].append(0)
+
+                    # Throttle Reasons (Bitmask Decoding)
+                    try:
+                        reasons = []
+                        mask = pynvml.nvmlDeviceGetCurrentClocksThrottleReasons(handle)
+                        if mask & pynvml.nvmlClocksThrottleReasonGpuIdle: reasons.append("Idle")
+                        if mask & pynvml.nvmlClocksThrottleReasonSwPowerCap: reasons.append("Power")
+                        if mask & pynvml.nvmlClocksThrottleReasonHwSlowdown: reasons.append("Thermal")
+                        if mask & pynvml.nvmlClocksThrottleReasonSyncBoost: reasons.append("Sync")
+                        if not reasons: reasons.append("None")
+                        h['throttle'].append("|".join(reasons))
+                    except:
+                        h['throttle'].append("Unknown")
             except: pass
         else:
             # Fallback for CLI (NVIDIA) - Only Basic Metrics to prevent slow parsing
@@ -231,17 +269,25 @@ class HardwareMonitor:
             if max_temp > 80 and max_clk > 0:
                 if avg_clk < (max_clk * 0.85):
                     throttled = True
+            
+            # Helper to find most common string
+            def mode_str(l): return max(set(l), key=l.count) if l else "N/A"
+            def safe_max(l): return round(np.max(l), 1) if l else 0
 
             stats[gid] = {
                 "avg_temp": safe_mean(data['temp_core']),
-                "max_temp": max_temp,
-                "max_mem_temp": safe_max(data['temp_mem']), # <--- Captured but will be used for file only
+                "max_temp": safe_max(data['temp_core']),
+                "max_mem_temp": safe_max(data['temp_mem']),
                 "avg_pwr":  safe_mean(data['pwr']),
                 "max_pwr":  safe_max(data['pwr']),
-                "avg_clk":  avg_clk,
-                "throttled": throttled,
-                "max_fan": safe_max(data['fan_pct']),       # <--- Captured but will be used for file only
-                "max_volts_core": safe_max(data['volts_core']), # <--- Captured but will be used for file only
-                "max_volts_soc": safe_max(data['volts_soc'])    # <--- Captured but will be used for file only
+                "avg_clk":  safe_mean(data['clk_core']),
+                "max_fan": safe_max(data['fan_pct']),
+                "max_volts_core": safe_max(data['volts_core']),
+                "max_volts_soc": safe_max(data['volts_soc']),
+
+                # New Aggregates
+                "pcie_gen": safe_max(data['pcie_gen']),
+                "pcie_width": safe_max(data['pcie_width']),
+                "throttle_reason": mode_str(data['throttle'])
             }
         return stats
