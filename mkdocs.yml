@@ -55,3 +55,4 @@ extra_css:
 extra_javascript:
   - https://cdn.jsdelivr.net/npm/apexcharts
   - js/charts.js
+  - js/tables.js
