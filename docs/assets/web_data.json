@@ -130,5 +130,137 @@
     "clock_avg": 1862.5,
     "efficiency": 291746.11,
     "date": "2026-02-08 19:31:37"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "sfu_stress",
+    "score": 181.0,
+    "unit": "Watts",
+    "temp_max": 73.0,
+    "power_max": 181.0,
+    "clock_avg": 1920.0,
+    "efficiency": 0,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "hbm_read",
+    "score": 440.174,
+    "unit": "GB/s",
+    "temp_max": 45.0,
+    "power_max": 120.0,
+    "clock_avg": 1826.8,
+    "efficiency": 4489.42,
+    "date": "2026-02-09 00:30:52"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "hbm_write",
+    "score": 370.183,
+    "unit": "GB/s",
+    "temp_max": 51.0,
+    "power_max": 125.0,
+    "clock_avg": 1968.4,
+    "efficiency": 3251.01,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "hbm_write_agg",
+    "score": 1133.11,
+    "unit": "GB/s",
+    "temp_max": 63.0,
+    "power_max": 167.0,
+    "clock_avg": 2011.7,
+    "efficiency": 7519.8,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "hbm_read_agg",
+    "score": 440.376,
+    "unit": "GB/s",
+    "temp_max": 60.0,
+    "power_max": 123.0,
+    "clock_avg": 2055.0,
+    "efficiency": 3799.03,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "voltage",
+    "score": 149.0,
+    "unit": "Watts",
+    "temp_max": 63.0,
+    "power_max": 149.0,
+    "clock_avg": 2011.7,
+    "efficiency": 0,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "incinerator",
+    "score": 139.0,
+    "unit": "Watts",
+    "temp_max": 63.0,
+    "power_max": 139.0,
+    "clock_avg": 2011.7,
+    "efficiency": 0,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "cache_lat",
+    "score": 130.0,
+    "unit": "Watts",
+    "temp_max": 62.0,
+    "power_max": 130.0,
+    "clock_avg": 2055.0,
+    "efficiency": 0,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "pcie_bandwidth",
+    "score": 44.5502,
+    "unit": "GB/s",
+    "temp_max": 66.0,
+    "power_max": 81.0,
+    "clock_avg": 1968.4,
+    "efficiency": 614.82,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "pulse_virus",
+    "score": 130.0,
+    "unit": "Watts",
+    "temp_max": 61.0,
+    "power_max": 130.0,
+    "clock_avg": 2011.7,
+    "efficiency": 0,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "tensor_virus",
+    "score": 181.0,
+    "unit": "Watts",
+    "temp_max": 74.0,
+    "power_max": 181.0,
+    "clock_avg": 1991.9,
+    "efficiency": 0,
+    "date": "2026-02-09 00:37:48"
+  },
+  {
+    "gpu": "Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]",
+    "test": "atomic_virus",
+    "score": 42668.6,
+    "unit": "GB/s",
+    "temp_max": 67.0,
+    "power_max": 134.0,
+    "clock_avg": 2055.0,
+    "efficiency": 344851.19,
+    "date": "2026-02-09 00:37:48"
   }
 ]
