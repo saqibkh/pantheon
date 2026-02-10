@@ -54,3 +54,27 @@ The summary report (`results/<timestamp>/summary.xlsx`) contains detailed "Pro" 
 * **Throughput (GB/s):**
     * For `hbm_read` / `hbm_write`, this should be within 90% of your card's theoretical max bandwidth.
     * Low throughput = Memory Controller instability or aggressive error correction (ECC) kicking in.
+
+## Website Dashboard
+
+Pantheon includes a built-in web dashboard to visualize your benchmark results and compare different GPUs.
+
+### 1. Install Dependencies
+The dashboard is built with MkDocs. You need to install the material theme:
+```bash
+pip install mkdocs-material
+```
+
+### 2. Generate Data
+The website reads from docs/assets/web_data.json. You must generate this file from your local database/ reports:
+```bash
+# parse local results and update the website JSON
+python3 website_utils/generate_web_data.py
+```
+
+### 3. Run Local Server
+Start the live preview server. It will auto-reload if you change any code or regenerate data.
+```bash
+mkdocs serve
+```
+Open https://www.google.com/search?q=http://127.0.0.1:8000 in your browser to view the performance leaderboard.
