@@ -2,7 +2,7 @@ site_name: PANTHEON
 site_description: Universal GPU Stress & Diagnostics Suite
 site_url: https://saqibkh.github.io/pantheon/
 repo_url: https://github.com/saqibkh/pantheon
-repo_name: saqikhan/pantheon
+repo_name: saqibkh/pantheon
 edit_uri: ""
 
 theme:
