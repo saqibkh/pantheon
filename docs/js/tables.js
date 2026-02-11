@@ -1,5 +1,29 @@
-let rawData = []; // Store full history
-let bestRuns = []; // Store only best scores
+// --- CONFIGURATION: Define all available columns ---
+const COL_DEFS = [
+    { key: "gpu",        label: "GPU Model",   visible: true },
+    { key: "test",       label: "Test Name",   visible: true },
+    { key: "version",    label: "Ver",         visible: true },
+    { key: "score",      label: "Score",       visible: true },
+    { key: "throughput", label: "Throughput",  visible: true },
+    { key: "duration",   label: "Duration",    visible: true },
+    { key: "temp_max",   label: "Peak Temp",   visible: true },
+    { key: "power_max",  label: "Peak Power",  visible: true },
+    { key: "clock_avg",  label: "Avg Clock",   visible: true },
+    { key: "date",       label: "Date",        visible: true },
+    // --- Hidden by default (Pro Metrics) ---
+    { key: "efficiency", label: "Efficiency (MB/J)", visible: false },
+    { key: "temp_mem",   label: "Mem Temp",    visible: false },
+    { key: "fan_max",    label: "Fan %",       visible: false },
+    { key: "pcie_gen",   label: "PCIe Gen",    visible: false },
+    { key: "pcie_width", label: "PCIe Width",  visible: false },
+    { key: "throttle",   label: "Limit Reason",visible: false },
+    { key: "volts_core", label: "Core (mV)",   visible: false },
+    { key: "volts_soc",  label: "SoC (mV)",    visible: false },
+];
+
+let rawData = [];
+let bestRuns = [];
+let currentSort = { key: 'score', dir: 'desc' }; // Default sort
 
 document.addEventListener("DOMContentLoaded", function () {
     const dataUrl = "../assets/web_data.json";
@@ -8,41 +32,217 @@ document.addEventListener("DOMContentLoaded", function () {
         .then(response => response.json())
         .then(data => {
             rawData = data;
-            // 1. Process data to find best runs
             bestRuns = getBestRunsOnly(rawData);
             
-            // 2. Populate filters based on the best runs
+            initColumnMenu();     // Setup the checkboxes
             populateFilters(bestRuns);
-            
-            // 3. Render the best runs by default
             renderTable(bestRuns);
         })
         .catch(err => console.error("Error loading benchmark data:", err));
 });
 
-// --- NEW: Aggregation Logic ---
+// --- 1. Aggregation Logic ---
 function getBestRunsOnly(data) {
     const groups = {};
-
     data.forEach(row => {
-        // Create a unique key for this GPU + Test combo
         const key = `${row.gpu}|${row.test}`;
-
-        // If we haven't seen this combo, or if this run has a higher score, save it
         if (!groups[key] || parseFloat(row.score) > parseFloat(groups[key].score)) {
             groups[key] = row;
         }
     });
-
-    // Convert the object back to an array
     return Object.values(groups);
 }
 
-// --- Populate Dropdown Menus ---
+// --- 2. Dynamic Table Rendering ---
+function renderTable(data) {
+    const table = document.getElementById("benchmarkTable");
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+
+    // A. Build Header based on Visible Columns
+    thead.innerHTML = "";
+    let headerRow = document.createElement("tr");
+    headerRow.style.cursor = "pointer";
+
+    COL_DEFS.forEach(col => {
+        if (col.visible) {
+            let th = document.createElement("th");
+            th.innerHTML = `${col.label} &#8597;`;
+            th.onclick = () => sortData(col.key);
+            headerRow.appendChild(th);
+        }
+    });
+    thead.appendChild(headerRow);
+
+    // B. Build Rows
+    tbody.innerHTML = "";
+    if (data.length === 0) {
+        let visibleCount = COL_DEFS.filter(c => c.visible).length;
+        tbody.innerHTML = `<tr><td colspan='${visibleCount}' style='text-align:center; padding: 20px;'>No results found</td></tr>`;
+        return;
+    }
+
+    data.forEach(row => {
+        const tr = document.createElement("tr");
+        
+        COL_DEFS.forEach(col => {
+            if (col.visible) {
+                let td = document.createElement("td");
+                let val = row[col.key];
+
+                // --- Special Formatting ---
+                if (col.key === "score") {
+                    val = (val === "N/A" || val === undefined) ? "N/A" : `${val} ${row.unit}`;
+                    td.style.fontWeight = "bold";
+                }
+		else if (col.key === "throughput") {
+                    // Only add GB/s if it's a number (not N/A)
+                    if (val !== "N/A" && val !== undefined && val !== 0) {
+                        val = val + " GB/s";
+                    } else {
+                        val = "N/A"; // Distinct from 0
+                    }
+                }
+		else if (col.key === "duration") {
+                    val = val + "s";  // Add 's' suffix (e.g., "30s")
+                }
+                else if (col.key === "gpu") {
+                    td.style.fontWeight = "bold";
+                    td.style.color = "#fff";
+                }
+                else if (col.key === "test") {
+                    td.style.color = "#00f3ff";
+                }
+                else if (col.key.includes("temp")) {
+                    td.style.color = getColorForTemp(val);
+                    if(val) val += "°C";
+                }
+                else if (col.key.includes("power")) {
+                    if(val) val += " W";
+                }
+                else if (col.key === "version") {
+                    td.style.fontSize = "0.8em";
+                    td.style.color = "#aaa";
+                    if(!val) val = "Legacy";
+                }
+                
+                if (val === undefined || val === 0 || val === "0") val = "N/A";
+                td.textContent = val;
+                tr.appendChild(td);
+            }
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+// --- 3. Sorting Logic ---
+function sortData(key) {
+    // Toggle direction if clicking same header
+    if (currentSort.key === key) {
+        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.key = key;
+        currentSort.dir = 'desc'; // Default to high-to-low for new columns
+    }
+
+    // Sort the global filtered list (so sorting works after filtering)
+    // We re-run applyFilters which will trigger the sort
+    applyFilters();
+}
+
+// --- 4. Filtering Logic ---
+function applyFilters() {
+    const gpuVal = document.getElementById("gpuFilter").value;
+    const testVal = document.getElementById("testFilter").value;
+    const searchVal = document.getElementById("textSearch").value.toLowerCase();
+
+    let filtered = bestRuns.filter(row => {
+        const gpuMatch = (gpuVal === "all") || (row.gpu === gpuVal);
+        const testMatch = (testVal === "all") || (row.test === testVal);
+        const rowString = Object.values(row).join(" ").toLowerCase();
+        const searchMatch = rowString.includes(searchVal);
+        return gpuMatch && testMatch && searchMatch;
+    });
+
+    // Apply Sorting
+    filtered.sort((a, b) => {
+        let valA = a[currentSort.key];
+        let valB = b[currentSort.key];
+
+        // Handle N/A or missing
+        if (valA === undefined || valA === "N/A") valA = -999999;
+        if (valB === undefined || valB === "N/A") valB = -999999;
+
+        // Numeric parsing
+        let numA = parseFloat(valA);
+        let numB = parseFloat(valB);
+
+        if (!isNaN(numA) && !isNaN(numB)) {
+            valA = numA;
+            valB = numB;
+        } else {
+            valA = String(valA).toLowerCase();
+            valB = String(valB).toLowerCase();
+        }
+
+        if (valA < valB) return currentSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentSort.dir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    renderTable(filtered);
+}
+
+// --- 5. Column Visibility UI ---
+function initColumnMenu() {
+    const menu = document.getElementById("columnMenu");
+    menu.innerHTML = "";
+
+    COL_DEFS.forEach((col, index) => {
+        let div = document.createElement("div");
+        div.style.marginBottom = "5px";
+        
+        let label = document.createElement("label");
+        label.style.cursor = "pointer";
+        label.style.display = "flex";
+        label.style.alignItems = "center";
+        
+        let check = document.createElement("input");
+        check.type = "checkbox";
+        check.checked = col.visible;
+        check.style.marginRight = "10px";
+        
+        check.onchange = () => {
+            COL_DEFS[index].visible = check.checked;
+            applyFilters(); // Re-render table
+        };
+
+        label.appendChild(check);
+        label.appendChild(document.createTextNode(col.label));
+        div.appendChild(label);
+        menu.appendChild(div);
+    });
+}
+
+function toggleColumnMenu() {
+    const menu = document.getElementById("columnMenu");
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+// Close menu if clicked outside
+window.onclick = function(event) {
+    if (!event.target.matches('button')) {
+        const menu = document.getElementById("columnMenu");
+        if (menu && menu.style.display === "block" && !menu.contains(event.target)) {
+            menu.style.display = "none";
+        }
+    }
+}
+
+// --- Helpers ---
 function populateFilters(data) {
     const gpuSet = new Set();
     const testSet = new Set();
-
     data.forEach(row => {
         gpuSet.add(row.gpu);
         testSet.add(row.test);
@@ -51,132 +251,23 @@ function populateFilters(data) {
     const gpuSelect = document.getElementById("gpuFilter");
     const testSelect = document.getElementById("testFilter");
 
-    // Clear existing options (in case of reload)
     gpuSelect.innerHTML = '<option value="all">All GPUs</option>';
     testSelect.innerHTML = '<option value="all">All Tests</option>';
 
-    // Add GPUs
     Array.from(gpuSet).sort().forEach(gpu => {
-        const option = document.createElement("option");
-        option.value = gpu;
-        option.textContent = gpu;
-        gpuSelect.appendChild(option);
+        let op = document.createElement("option"); op.value = gpu; op.textContent = gpu;
+        gpuSelect.appendChild(op);
     });
-
-    // Add Tests
     Array.from(testSet).sort().forEach(test => {
-        const option = document.createElement("option");
-        option.value = test;
-        option.textContent = test;
-        testSelect.appendChild(option);
+        let op = document.createElement("option"); op.value = test; op.textContent = test;
+        testSelect.appendChild(op);
     });
 }
 
-// --- Render Table ---
-function renderTable(data) {
-    const tableBody = document.querySelector("#benchmarkTable tbody");
-    tableBody.innerHTML = ""; 
-
-    if (data.length === 0) {
-        tableBody.innerHTML = "<tr><td colspan='7' style='text-align:center; padding: 20px;'>No results found</td></tr>";
-        return;
-    }
-
-    data.forEach(row => {
-        const tr = document.createElement("tr");
-        
-        let scoreDisplay = (row.score === "N/A" || row.score === undefined) ? "N/A" : `${row.score} ${row.unit}`;
-        
-        // Color coding
-        const tempColor = getColorForTemp(row.temp_max);
-
-        tr.innerHTML = `
-            <td style="font-weight:bold; color:#fff;">${row.gpu}</td>
-            <td style="color:#00f3ff;">${row.test}</td>
-            <td style="font-weight:bold;">${scoreDisplay}</td>
-            <td style="color:${tempColor};">${row.temp_max ? row.temp_max + "°C" : "N/A"}</td>
-            <td>${row.power_max ? row.power_max + " W" : "N/A"}</td>
-            <td>${row.clock_avg ? row.clock_avg + " MHz" : "N/A"}</td>
-            <td style="font-size:0.85em; color:#888;">${row.date || ""}</td>
-        `;
-        tableBody.appendChild(tr);
-    });
-}
-
-// --- Filter Logic ---
-function applyFilters() {
-    const gpuVal = document.getElementById("gpuFilter").value;
-    const testVal = document.getElementById("testFilter").value;
-    const searchVal = document.getElementById("textSearch").value.toLowerCase();
-
-    // Always filter against 'bestRuns' so we don't show duplicates
-    const filtered = bestRuns.filter(row => {
-        const gpuMatch = (gpuVal === "all") || (row.gpu === gpuVal);
-        const testMatch = (testVal === "all") || (row.test === testVal);
-        const rowString = `${row.gpu} ${row.test} ${row.date}`.toLowerCase();
-        const searchMatch = rowString.includes(searchVal);
-
-        return gpuMatch && testMatch && searchMatch;
-    });
-
-    renderTable(filtered);
-}
-
-// --- Helpers ---
 function getColorForTemp(temp) {
     if (!temp) return "#fff";
     if (temp < 60) return "#00e676"; // Green
     if (temp < 80) return "#ffeb3b"; // Yellow
     if (temp >= 85) return "#ff3d00"; // Red
     return "#fff";
-}
-
-function sortTable(n) {
-    const table = document.getElementById("benchmarkTable");
-    let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-    switching = true;
-    dir = "asc"; 
-    
-    while (switching) {
-        switching = false;
-        rows = table.rows;
-        for (i = 1; i < (rows.length - 1); i++) {
-            shouldSwitch = false;
-            x = rows[i].getElementsByTagName("TD")[n];
-            y = rows[i + 1].getElementsByTagName("TD")[n];
-            
-            let xVal = x.textContent.toLowerCase().replace(/[^0-9a-z\.\-]/g, ""); 
-            let yVal = y.textContent.toLowerCase().replace(/[^0-9a-z\.\-]/g, "");
-
-            let xNum = parseFloat(xVal);
-            let yNum = parseFloat(yVal);
-            let isNumeric = !isNaN(xNum) && !isNaN(yNum);
-
-            if (isNumeric) {
-                 if (dir == "asc") {
-                    if (xNum > yNum) { shouldSwitch = true; break; }
-                } else if (dir == "desc") {
-                    if (xNum < yNum) { shouldSwitch = true; break; }
-                }
-            } else {
-                xVal = x.textContent.toLowerCase();
-                yVal = y.textContent.toLowerCase();
-                if (dir == "asc") {
-                    if (xVal > yVal) { shouldSwitch = true; break; }
-                } else if (dir == "desc") {
-                    if (xVal < yVal) { shouldSwitch = true; break; }
-                }
-            }
-        }
-        if (shouldSwitch) {
-            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-            switching = true;
-            switchcount ++; 
-        } else {
-            if (switchcount == 0 && dir == "asc") {
-                dir = "desc";
-                switching = true;
-            }
-        }
-    }
 }
