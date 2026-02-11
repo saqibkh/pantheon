@@ -23,7 +23,12 @@ else ifeq ($(PLATFORM), CUDA)
     CXXFLAGS += -x cu --gpu-architecture=sm_$(DETECTED_ARCH) -Wno-deprecated-gpu-targets
 else
     COMPILER := hipcc
-    CXXFLAGS += -std=c++17 --offload-arch=native
+    # Uses the first value from your rocm_agent_enumerator output
+    DETECTED_GFX := $(shell rocm_agent_enumerator | grep -v "cpu" | head -n 1)
+    ifeq ($(DETECTED_GFX),)
+        DETECTED_GFX := gfx942
+    endif
+    CXXFLAGS += -std=c++17 --offload-arch=$(DETECTED_GFX)
 endif
 
 # --- Auto-Discovery Logic ---

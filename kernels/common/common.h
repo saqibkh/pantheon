@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <cstdlib>
+#include <cstring>
+#include <string>
 
 // ==========================================
 // PATH 1: CPU MOCK SIMULATION (CI/CD)
