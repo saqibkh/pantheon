@@ -4,6 +4,7 @@ const COL_DEFS = [
     { key: "test",       label: "Test Name",   visible: true },
     { key: "version",    label: "Ver",         visible: true },
     { key: "score",      label: "Score",       visible: true },
+    { key: "duration",   label: "Duration",    visible: true },
     { key: "temp_max",   label: "Peak Temp",   visible: true },
     { key: "power_max",  label: "Peak Power",  visible: true },
     { key: "clock_avg",  label: "Avg Clock",   visible: true },
@@ -92,7 +93,10 @@ function renderTable(data) {
                 if (col.key === "score") {
                     val = (val === "N/A" || val === undefined) ? "N/A" : `${val} ${row.unit}`;
                     td.style.fontWeight = "bold";
-                } 
+                }
+		else if (col.key === "duration") {
+                    val = val + "s";  // Add 's' suffix (e.g., "30s")
+                }
                 else if (col.key === "gpu") {
                     td.style.fontWeight = "bold";
                     td.style.color = "#fff";

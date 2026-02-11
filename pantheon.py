@@ -258,7 +258,7 @@ def main():
 
     # --- NEW: Display GPU Information ---
     print("\n" + "="*60)
-    print("PANTHEON SYSTEM DETECTED (v{PANTHEON_VERSION})")
+    print(f"PANTHEON SYSTEM DETECTED (v{PANTHEON_VERSION})")
     print("="*60)
     gpu_info = get_gpu_static_info()
     if not gpu_info:
