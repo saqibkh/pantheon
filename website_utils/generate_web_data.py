@@ -64,6 +64,7 @@ def main():
                     record = {
                         "gpu": gpu_name,
                         "test": test_name,
+                        "version": data.get("pantheon_version", "Legacy"),
                         "score": score_val,
                         "unit": unit,
                         "temp_max": test.get("Max Temp (C)", 0),

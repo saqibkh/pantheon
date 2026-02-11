@@ -13,6 +13,8 @@ import numpy as np
 import atexit
 from monitor import HardwareMonitor
 
+PANTHEON_VERSION = "1.0.0"
+
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types """
     def default(self, obj):
@@ -159,6 +161,7 @@ def get_toolkit_version(platform_name):
 def get_system_snapshot(platform_name):
     """Aggregates all system info into a dictionary."""
     snapshot = {
+        "pantheon_version": PANTHEON_VERSION,
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "os_info": {
             "system": platform.system(),
@@ -255,7 +258,7 @@ def main():
 
     # --- NEW: Display GPU Information ---
     print("\n" + "="*60)
-    print("PANTHEON SYSTEM DETECTED")
+    print("PANTHEON SYSTEM DETECTED (v{PANTHEON_VERSION})")
     print("="*60)
     gpu_info = get_gpu_static_info()
     if not gpu_info:
@@ -351,6 +354,7 @@ def main():
 
             row = {
                 "Test Name": test,
+                "Version": PANTHEON_VERSION,
                 "Description": TEST_REGISTRY[test]["desc"],
                 "GPU ID": gpu,
                 "Duration (s)": args.duration,

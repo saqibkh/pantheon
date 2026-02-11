@@ -20,7 +20,7 @@ Complete registry of stress test results.
       <tr style="cursor: pointer;">
         <th onclick="sortTable(0)">GPU Model &#8597;</th>
         <th onclick="sortTable(1)">Test Name &#8597;</th>
-        <th onclick="sortTable(2)">Score &#8597;</th>
+        <th onclick="sortTable(2)">Ver &#8597;</th>
         <th onclick="sortTable(3)">Peak Temp &#8597;</th>
         <th onclick="sortTable(4)">Peak Power &#8597;</th>
         <th onclick="sortTable(5)">Avg Clock &#8597;</th>

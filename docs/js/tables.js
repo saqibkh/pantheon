@@ -93,7 +93,8 @@ function renderTable(data) {
         tr.innerHTML = `
             <td style="font-weight:bold; color:#fff;">${row.gpu}</td>
             <td style="color:#00f3ff;">${row.test}</td>
-            <td style="font-weight:bold;">${scoreDisplay}</td>
+	    <td style="font-size:0.8em; color:#aaa;">${row.version || "Legacy"}</td> 
+	    <td style="font-weight:bold;">${scoreDisplay}</td>
             <td style="color:${tempColor};">${row.temp_max ? row.temp_max + "°C" : "N/A"}</td>
             <td>${row.power_max ? row.power_max + " W" : "N/A"}</td>
             <td>${row.clock_avg ? row.clock_avg + " MHz" : "N/A"}</td>
