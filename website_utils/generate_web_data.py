@@ -62,6 +62,7 @@ def main():
                         "version": data.get("pantheon_version", "1.0.0"),
                         "score": score_val,
                         "unit": unit,
+                        "throughput": raw_score,
                         "duration": test.get("Duration (s)", 0),
                         # Standard Metrics
                         "temp_max": test.get("Max Temp (C)", 0),

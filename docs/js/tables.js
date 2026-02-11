@@ -4,6 +4,7 @@ const COL_DEFS = [
     { key: "test",       label: "Test Name",   visible: true },
     { key: "version",    label: "Ver",         visible: true },
     { key: "score",      label: "Score",       visible: true },
+    { key: "throughput", label: "Throughput",  visible: true },
     { key: "duration",   label: "Duration",    visible: true },
     { key: "temp_max",   label: "Peak Temp",   visible: true },
     { key: "power_max",  label: "Peak Power",  visible: true },
@@ -93,6 +94,14 @@ function renderTable(data) {
                 if (col.key === "score") {
                     val = (val === "N/A" || val === undefined) ? "N/A" : `${val} ${row.unit}`;
                     td.style.fontWeight = "bold";
+                }
+		else if (col.key === "throughput") {
+                    // Only add GB/s if it's a number (not N/A)
+                    if (val !== "N/A" && val !== undefined && val !== 0) {
+                        val = val + " GB/s";
+                    } else {
+                        val = "N/A"; // Distinct from 0
+                    }
                 }
 		else if (col.key === "duration") {
                     val = val + "s";  // Add 's' suffix (e.g., "30s")
